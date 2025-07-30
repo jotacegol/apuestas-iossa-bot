@@ -22,18 +22,8 @@ const cookieParser = require('cookie-parser');
 
 // Servidor Web
 const app = express();
-app.set('trust proxy', 1);
 const server = http.createServer(app);
-const io = socketIo(server, { 
-    cors: { 
-        origin: process.env.NODE_ENV === 'production' 
-            ? [process.env.PRODUCTION_URL] 
-            : ["http://localhost:3000"],
-        methods: ["GET", "POST"],
-        credentials: true
-    },
-    transports: ['websocket', 'polling'] // Para mejor compatibilidad en Render
-});
+const io = socketIo(server, { cors: { origin: "*", methods: ["GET", "POST"] } });
 
 // Configuración Passport
 passport.use(new DiscordStrategy({
@@ -113,22 +103,15 @@ app.use(session({
     saveUninitialized: false,
     cookie: { 
         maxAge: 24 * 60 * 60 * 1000, // 24 horas
-        secure: process.env.NODE_ENV === 'production', // TRUE en producción, FALSE en desarrollo
+        secure: false, // IMPORTANTE: Cambiar a false para desarrollo local
         httpOnly: true,
-        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax' // Para HTTPS en producción
+        sameSite: 'lax'
     },
-    name: 'discord-auth-session'
+    name: 'discord-auth-session' // Nombre específico para la sesión
 }));
 app.use(passport.initialize());
 app.use(passport.session());
-app.use(cors({
-    origin: process.env.NODE_ENV === 'production' 
-        ? [process.env.PRODUCTION_URL, 'https://discord.com'] 
-        : ['http://localhost:3000', 'https://discord.com'],
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'Cookie']
-}));
+app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -261,15 +244,77 @@ app.post('/api/bet', requireAuth, (req, res) => {
 
 app.get('/api/matches', (req, res) => res.json(Object.values(matches).filter(m => m.status === 'upcoming')));
 app.get('/api/stats', (req, res) => res.json({ totalMatches: Object.values(matches).filter(m => m.status === 'upcoming').length, totalUsers: Object.keys(userData).length, totalBets: Object.keys(bets).length, totalVolume: Object.values(bets).reduce((sum, bet) => sum + bet.amount, 0) }));
-app.get('/api/recent-bets', (req, res) => res.json(Object.values(bets).sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)).slice(0, 10).map(bet => { const match = matches[bet.matchId]; if (!match) return null; let predictionText = bet.prediction === 'team1' ? match.team1.split(' (')[0] : bet.prediction === 'team2' ? match.team2.split(' (')[0] : 'Empate'; return { match: `${match.team1.split(' (')[0]} vs ${match.team2.split(' (')[0]}`, prediction: predictionText, amount: bet.amount, status: bet.status }; }).filter(bet => bet !== null)));
+app.get('/api/recent-bets', (req, res) => res.json(Object.values(bets).sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)).slice(0, 10).map(bet => { 
+    const match = matches[bet.matchId]; 
+    if (!match) return null; 
+    
+    let predictionText;
+    
+    // *** CORRECCIÓN PARA APUESTAS RECIENTES ***
+    if (bet.betType === 'exact_score' && bet.exactScore) {
+        predictionText = `Exacto ${bet.exactScore.home}-${bet.exactScore.away}`;
+    } else if (bet.betType === 'special' && bet.description) {
+        predictionText = bet.description;
+    } else if (bet.betType === 'special_combined' && bet.description) {
+        predictionText = bet.description;
+    } else if (bet.prediction) {
+        predictionText = bet.prediction === 'team1' ? match.team1.split(' (')[0] : 
+                       bet.prediction === 'team2' ? match.team2.split(' (')[0] : 'Empate';
+    } else if (bet.description) {
+        predictionText = bet.description;
+    } else {
+        predictionText = 'Apuesta especial';
+    }
+    
+    return { 
+        match: `${match.team1.split(' (')[0]} vs ${match.team2.split(' (')[0]}`, 
+        prediction: predictionText, 
+        amount: bet.amount, 
+        status: bet.status 
+    }; 
+}).filter(bet => bet !== null)));
 
 app.get('/api/user/bets', requireAuth, (req, res) => {
     const userId = req.user.id;
     const userBets = Object.values(bets).filter(bet => bet.userId === userId).sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)).slice(0, 20).map(bet => {
         const match = matches[bet.matchId];
         if (!match) return null;
-        let predictionText = bet.prediction === 'team1' ? match.team1.split(' (')[0] : bet.prediction === 'team2' ? match.team2.split(' (')[0] : 'Empate';
-        return { ...bet, match: { team1: match.team1.split(' (')[0], team2: match.team2.split(' (')[0], result: match.result, score: match.score }, predictionText, potentialWinning: bet.amount * bet.odds };
+        
+        let predictionText;
+        
+        // *** AQUÍ ESTÁ LA CORRECCIÓN PRINCIPAL ***
+        if (bet.betType === 'exact_score' && bet.exactScore) {
+            // Para resultado exacto, mostrar el marcador apostado
+            predictionText = `Exacto ${bet.exactScore.home}-${bet.exactScore.away}`;
+        } else if (bet.betType === 'special' && bet.description) {
+            // Para apuestas especiales, usar la descripción guardada
+            predictionText = bet.description;
+        } else if (bet.betType === 'special_combined' && bet.description) {
+            // Para apuestas especiales combinadas
+            predictionText = bet.description;
+        } else if (bet.prediction) {
+            // Para apuestas simples tradicionales
+            predictionText = bet.prediction === 'team1' ? match.team1.split(' (')[0] : 
+                           bet.prediction === 'team2' ? match.team2.split(' (')[0] : 'Empate';
+        } else if (bet.description) {
+            // Fallback: usar descripción si existe
+            predictionText = bet.description;
+        } else {
+            // Fallback final
+            predictionText = 'Apuesta especial';
+        }
+        
+        return { 
+            ...bet, 
+            match: { 
+                team1: match.team1.split(' (')[0], 
+                team2: match.team2.split(' (')[0], 
+                result: match.result, 
+                score: match.score 
+            }, 
+            predictionText, 
+            potentialWinning: bet.amount * bet.odds 
+        };
     }).filter(bet => bet !== null);
     res.json(userBets);
 });
@@ -616,14 +661,7 @@ app.get('/api/pending-matches', requireAuth, (req, res) => {
     
     res.json(pendingMatches);
 });
-app.get('/health', (req, res) => {
-    res.status(200).json({ 
-        status: 'OK', 
-        timestamp: new Date().toISOString(),
-        uptime: process.uptime(),
-        environment: process.env.NODE_ENV || 'development'
-    });
-});
+
 // Bot Discord
 const client = new Discord.Client({ intents: [Discord.GatewayIntentBits.Guilds, Discord.GatewayIntentBits.GuildMessages, Discord.GatewayIntentBits.MessageContent] });
 
@@ -1843,22 +1881,39 @@ corner, libre, chilena, cabeza, delantero, medio, defensa, arquero
     break;
 
         case '!misapuestas':
-        case '!mybets':
-            const userBets = Object.values(bets).filter(bet => bet.userId === message.author.id);
-            if (userBets.length === 0) { message.reply('❌ No tienes apuestas registradas.'); return; }
-            
-            const betsText = userBets.slice(-10).map(bet => {
-                const match = matches[bet.matchId];
-                if (!match) return '❌ Partido eliminado';
-                
-                let predictionText = bet.prediction === 'team1' ? match.team1.split(' (')[0] : bet.prediction === 'team2' ? match.team2.split(' (')[0] : 'Empate';
-                const statusEmoji = bet.status === 'won' ? '✅' : bet.status === 'lost' ? '❌' : '⏳';
-                return `${statusEmoji} **${match.team1.split(' (')[0]} vs ${match.team2.split(' (')[0]}**\nPredicción: ${predictionText} | Cuota: ${bet.odds} | Apostado: ${bet.amount}`;
-            }).join('\n\n');
-            
-            const myBetsEmbed = new Discord.EmbedBuilder().setColor('#9900ff').setTitle('📋 Tus Últimas Apuestas').setDescription(betsText);
-            message.reply({ embeds: [myBetsEmbed] });
-            break;
+case '!mybets':
+    const userBets = Object.values(bets).filter(bet => bet.userId === message.author.id);
+    if (userBets.length === 0) { message.reply('❌ No tienes apuestas registradas.'); return; }
+    
+    const betsText = userBets.slice(-10).map(bet => {
+        const match = matches[bet.matchId];
+        if (!match) return '❌ Partido eliminado';
+        
+        let predictionText;
+        
+        // *** CORRECCIÓN PARA DISCORD ***
+        if (bet.betType === 'exact_score' && bet.exactScore) {
+            predictionText = `Exacto ${bet.exactScore.home}-${bet.exactScore.away}`;
+        } else if (bet.betType === 'special' && bet.description) {
+            predictionText = bet.description;
+        } else if (bet.betType === 'special_combined' && bet.description) {
+            predictionText = bet.description;
+        } else if (bet.prediction) {
+            predictionText = bet.prediction === 'team1' ? match.team1.split(' (')[0] : 
+                           bet.prediction === 'team2' ? match.team2.split(' (')[0] : 'Empate';
+        } else if (bet.description) {
+            predictionText = bet.description;
+        } else {
+            predictionText = 'Apuesta especial';
+        }
+        
+        const statusEmoji = bet.status === 'won' ? '✅' : bet.status === 'lost' ? '❌' : '⏳';
+        return `${statusEmoji} **${match.team1.split(' (')[0]} vs ${match.team2.split(' (')[0]}**\nPredicción: ${predictionText} | Cuota: ${bet.odds} | Apostado: ${bet.amount}`;
+    }).join('\n\n');
+    
+    const myBetsEmbed = new Discord.EmbedBuilder().setColor('#9900ff').setTitle('📋 Tus Últimas Apuestas').setDescription(betsText);
+    message.reply({ embeds: [myBetsEmbed] });
+    break;
 
         case '!eliminarmatch':
         case '!deletematch':
@@ -2019,21 +2074,56 @@ case '!help':
 case '!ayuda':
     const helpEmbed = new Discord.EmbedBuilder()
         .setColor('#0099ff')
-        .setTitle('🤖 Bot de Apuestas IOSoccer - Comandos')
+        .setTitle('🤖 Bot de Apuestas IOSoccer - Guía de Comandos')
+        .setDescription('**¡Bienvenido al bot de apuestas con datos reales de IOSoccer Sudamérica!**\nAquí tienes todos los comandos organizados por categorías:')
         .addFields(
-            { name: '**💰 Gestión de Usuario**', value: '`!balance` / `!dinero` - Ver tu dinero y estadísticas\n`!misapuestas` / `!mybets` - Ver tus últimas apuestas', inline: false },
-            { name: '**💸 Transferencias**', value: '`!dar @usuario <cantidad>` / `!give` / `!dardinero` - Dar dinero a otro usuario\n`!admindar @usuario <cantidad>` / `!admingive` - (Solo Admin) Otorgar dinero gratis', inline: false },
-            { name: '**🏆 Equipos**', value: '`!equipos` / `!teams` - Ver todos los equipos organizados por torneo\n`!limpiarequipos` - Eliminar todos los equipos', inline: false },
-            { name: '**🌐 Actualizar desde IOSoccer**', value: '`!actualizartodo` / `!updateall` - Actualizar todos los torneos\n`!actualizartorneo <código>` - Actualizar torneo específico\n`!actualizard1`, `!actualizard2` - Actualizar ligas específicas', inline: false },
-            { name: '**⚽ Partidos**', value: '`!partidos` / `!matches` - Ver próximos partidos\n`!generarmatch` - Crear nuevo partido aleatorio\n`!crearmatch` / `!crearpartido` / `!match` - Crear partido específico', inline: false },
-            { name: '**💵 Apuestas Básicas**', value: '`!apostar <ID> <team1/draw/team2> <cantidad>` / `!bet` - Hacer apuesta simple\n`!cuotas <ID>` / `!odds` - Ver todas las cuotas de un partido', inline: false },
-            { name: '**🎯 Apuestas Especiales**', value: '`!apostarespecial <ID> <tipo> <cantidad>` / `!betspecial` - Apuestas especiales\nTipos: `exacto-X-Y`, `ambos-marcan`, `mas-2-5`, `menos-2-5`, `corner`, `libre`, `chilena`, `cabeza`, `delantero`, `medio`, `defensa`, `arquero`', inline: false },
-            { name: '**🎯 Crear Partidos por Torneo**', value: '`!crearmatch "Boca" vs "River"` - Buscar en todos los torneos\n`!crearmatch "Boca" vs "River" d1` - Solo Liga D1\n`!crearmatch "Racing" vs "Independiente" maradei` - Copa Maradei', inline: false },
-            { name: '**🏅 Códigos de Torneos**', value: '`d1` Liga D1, `d2` Liga D2, `d3` Liga D3\n`maradei` Copa Maradei, `cv` Copa ValencARc\n`cd2` Copa D2, `cd3` Copa D3\n`izoro` Copa Intrazonal Oro, `izplata` Copa Intrazonal Plata', inline: false },
-            { name: '**🎮 Simulación y Resultados**', value: '`!simular <ID>` / `!simulate` - Simular resultado automático\n`!resultado <ID> <team1/draw/team2> <goles1> <goles2> [especiales]` / `!setresult` - Establecer resultado manual', inline: false },
-            { name: '**🗑️ Administración**', value: '`!eliminarmatch <ID>` / `!deletematch` - Eliminar partido específico\n`!limpiarpartidos` / `!clearmatches` - Eliminar partidos pendientes\n`!limpiarhistorial` / `!clearhistory` - Limpiar partidos terminados', inline: false }
+            { 
+                name: '💰 **MI PERFIL Y DINERO**', 
+                value: '`!balance` - Ver tu dinero, apuestas ganadas/perdidas y estadísticas\n`!misapuestas` - Ver tus últimas 10 apuestas con resultados\n`!dar @usuario <cantidad>` - Transferir dinero a otro jugador', 
+                inline: false 
+            },
+            { 
+                name: '🏆 **EQUIPOS Y TORNEOS**', 
+                value: '`!equipos` - Ver todos los equipos organizados por torneo\n`!actualizartodo` - Actualizar equipos desde IOSoccer (todas las ligas)\n`!actualizartorneo <código>` - Actualizar torneo específico (d1, d2, maradei, etc.)', 
+                inline: false 
+            },
+            { 
+                name: '⚽ **PARTIDOS**', 
+                value: '`!partidos` - Ver todos los partidos disponibles para apostar\n`!crearmatch "Equipo1" vs "Equipo2"` - Crear partido personalizado\n`!crearmatch "Boca" vs "River" d1` - Crear partido de torneo específico\n`!generarmatch` - Generar partido aleatorio automático', 
+                inline: false 
+            },
+            { 
+                name: '💵 **APUESTAS BÁSICAS**', 
+                value: '`!apostar <ID> team1 <cantidad>` - Apostar por victoria del primer equipo\n`!apostar <ID> draw <cantidad>` - Apostar por empate\n`!apostar <ID> team2 <cantidad>` - Apostar por victoria del segundo equipo\n`!cuotas <ID>` - Ver todas las cuotas disponibles de un partido', 
+                inline: false 
+            },
+            { 
+                name: '🎯 **APUESTAS ESPECIALES**', 
+                value: '`!apostarespecial <ID> exacto-2-1 <cantidad>` - Resultado exacto\n`!apostarespecial <ID> ambos-marcan <cantidad>` - Ambos equipos marcan\n`!apostarespecial <ID> mas-2-5 <cantidad>` - Más de 2.5 goles\n`!apostarespecial <ID> corner <cantidad>` - Habrá gol de córner\n`!apostarespecial <ID> chilena <cantidad>` - Habrá gol de chilena\n*Y muchos más tipos especiales...*', 
+                inline: false 
+            },
+            { 
+                name: '🎮 **RESULTADOS**', 
+                value: '`!simular <ID>` - Simular automáticamente el resultado de un partido\n`!resultado <ID> team1 2 1` - Establecer resultado manual (solo admin)\n`!resultado <ID> team1 2 1 corner,cabeza` - Con eventos especiales', 
+                inline: false 
+            },
+            { 
+                name: '🏅 **CÓDIGOS DE TORNEOS**', 
+                value: '**Ligas:** `d1` `d2` `d3`\n**Copas:** `maradei` `cv` `cd2` `cd3` `izoro` `izplata`\n*Ejemplo: !crearmatch "Racing" vs "Independiente" maradei*', 
+                inline: false 
+            },
+            { 
+                name: '🗑️ **ADMINISTRACIÓN** *(Solo Admin)*', 
+                value: '`!admindar @usuario <cantidad>` - Dar dinero gratis\n`!eliminarmatch <ID>` - Eliminar partido específico\n`!limpiarpartidos` - Eliminar todos los partidos pendientes\n`!limpiarhistorial` - Limpiar partidos terminados', 
+                inline: false 
+            }
         )
-        .setFooter({ text: 'Bot con torneos reales de IOSoccer SA • Los torneos de copa no muestran WDL (son eliminatorios)' });
+        .setFooter({ 
+            text: '💡 Tip: Los equipos y posiciones se actualizan automáticamente desde IOSoccer • Las copas eliminatorias no muestran forma WDL',
+            iconURL: client.user.avatarURL()
+        })
+        .setTimestamp();
+    
     message.reply({ embeds: [helpEmbed] });
     break;
     case '!cuotas':
