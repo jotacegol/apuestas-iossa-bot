@@ -22,41 +22,113 @@ const cookieParser = require('cookie-parser');
 
 // Servidor Web
 const app = express();
+app.set('trust proxy', 1);
 const server = http.createServer(app);
-const io = socketIo(server, { cors: { origin: "*", methods: ["GET", "POST"] } });
+const io = socketIo(server, { 
+    cors: { 
+        origin: process.env.NODE_ENV === 'production' 
+            ? [process.env.PRODUCTION_URL] 
+            : ["http://localhost:3000"],
+        methods: ["GET", "POST"],
+        credentials: true
+    },
+    transports: ['websocket', 'polling'] // Para mejor compatibilidad en Render
+});
 
 // Configuración Passport
 passport.use(new DiscordStrategy({
-    clientID: process.env.DISCORD_CLIENT_ID || 'tu_client_id',
-    clientSecret: process.env.DISCORD_CLIENT_SECRET || 'tu_client_secret',
-    callbackURL: process.env.NODE_ENV === 'production' ? `${process.env.PRODUCTION_URL}/auth/discord/callback` : 'http://localhost:3000/auth/discord/callback',
+    clientID: process.env.DISCORD_CLIENT_ID,
+    clientSecret: process.env.DISCORD_CLIENT_SECRET,
+    callbackURL: process.env.NODE_ENV === 'production' 
+        ? `${process.env.PRODUCTION_URL}/auth/discord/callback` 
+        : 'http://localhost:3000/auth/discord/callback',
     scope: ['identify', 'guilds']
-}, (accessToken, refreshToken, profile, done) => {
-    initUser(profile.id, profile.username);
-    return done(null, { id: profile.id, username: profile.username, discriminator: profile.discriminator, avatar: profile.avatar, accessToken });
+}, async (accessToken, refreshToken, profile, done) => {
+    try {
+        console.log('✅ Usuario autenticado desde Discord:', profile.username);
+        
+        // Asegurar que el usuario existe en la base de datos
+        await initUser(profile.id, profile.username, profile.discriminator, profile.avatar);
+        
+        const userProfile = {
+            id: profile.id,
+            username: profile.username,
+            discriminator: profile.discriminator,
+            avatar: profile.avatar,
+            accessToken: accessToken
+        };
+        
+        return done(null, userProfile);
+    } catch (error) {
+        console.error('❌ Error en estrategia Discord:', error);
+        return done(error, null);
+    }
 }));
 
-passport.serializeUser((user, done) => done(null, user.id));
-passport.deserializeUser((id, done) => {
-    if (userData[id]) {
-        done(null, { 
-            id, 
-            username: userData[id].username || 'Usuario', 
-            discriminator: userData[id].discriminator || '0000',
-            avatar: userData[id].avatar,
-            ...userData[id] 
-        });
-    } else {
-        done(null, null);
+passport.serializeUser((user, done) => {
+    console.log('📦 Serializando usuario:', user.username);
+    done(null, user.id);
+});
+
+passport.deserializeUser(async (id, done) => {
+    try {
+        console.log('📦 Deserializando usuario con ID:', id);
+        
+        // Asegurar que el usuario existe en userData
+        if (!userData[id]) {
+            console.log('⚠️ Usuario no encontrado en userData, inicializando...');
+            await initUser(id);
+        }
+        
+        const user = userData[id];
+        if (user) {
+            const userProfile = {
+                id: id,
+                username: user.username || 'Usuario',
+                discriminator: user.discriminator || '0000',
+                avatar: user.avatar,
+                balance: user.balance || 1000,
+                totalBets: user.totalBets || 0,
+                wonBets: user.wonBets || 0,
+                lostBets: user.lostBets || 0,
+                totalWinnings: user.totalWinnings || 0
+            };
+            console.log('✅ Usuario deserializado correctamente:', userProfile.username);
+            done(null, userProfile);
+        } else {
+            console.log('❌ Usuario no encontrado después de inicializar');
+            done(null, null);
+        }
+    } catch (error) {
+        console.error('❌ Error deserializando usuario:', error);
+        done(error, null);
     }
 });
 
 // Middleware
 app.use(cookieParser());
-app.use(session({ secret: process.env.SESSION_SECRET || 'tu_clave_secreta_aqui', resave: false, saveUninitialized: false, cookie: { maxAge: 24 * 60 * 60 * 1000, secure: process.env.NODE_ENV === 'production' } }));
+app.use(session({ 
+    secret: process.env.SESSION_SECRET || 'tu_clave_secreta_muy_segura_aqui_123456', 
+    resave: false, 
+    saveUninitialized: false,
+    cookie: { 
+        maxAge: 24 * 60 * 60 * 1000, // 24 horas
+        secure: process.env.NODE_ENV === 'production', // TRUE en producción, FALSE en desarrollo
+        httpOnly: true,
+        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax' // Para HTTPS en producción
+    },
+    name: 'discord-auth-session'
+}));
 app.use(passport.initialize());
 app.use(passport.session());
-app.use(cors());
+app.use(cors({
+    origin: process.env.NODE_ENV === 'production' 
+        ? [process.env.PRODUCTION_URL, 'https://discord.com'] 
+        : ['http://localhost:3000', 'https://discord.com'],
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Cookie']
+}));
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -64,45 +136,106 @@ function requireAuth(req, res, next) { req.isAuthenticated() ? next() : res.stat
 
 // Rutas Auth
 app.get('/auth/discord', passport.authenticate('discord'));
-app.get('/auth/discord/callback', passport.authenticate('discord', { failureRedirect: '/?error=auth_failed' }), (req, res) => {
-    // Actualizar los datos del usuario después del login exitoso
-    if (req.user) {
-        initUser(req.user.id, req.user.username, req.user.discriminator, req.user.avatar);
-        console.log(`✅ Usuario autenticado: ${req.user.username} - Balance: ${userData[req.user.id]?.balance || 1000}`);
+app.get('/auth/discord/callback', 
+    passport.authenticate('discord', { 
+        failureRedirect: '/?error=auth_failed',
+        failureMessage: true
+    }), 
+    async (req, res) => {
+        try {
+            console.log('🔄 Callback de Discord ejecutado');
+            
+            if (req.user) {
+                console.log('✅ Usuario en callback:', req.user.username);
+                
+                // Asegurar que el usuario está correctamente inicializado
+                await initUser(req.user.id, req.user.username, req.user.discriminator, req.user.avatar);
+                
+                console.log(`✅ Usuario autenticado exitosamente: ${req.user.username} - Balance: ${userData[req.user.id]?.balance || 1000}`);
+                
+                // Redireccionar al dashboard
+                res.redirect('/dashboard');
+            } else {
+                console.log('❌ No hay usuario en req.user');
+                res.redirect('/?error=no_user');
+            }
+        } catch (error) {
+            console.error('❌ Error en callback:', error);
+            res.redirect('/?error=callback_error');
+        }
     }
-    res.redirect('/');
+);
+app.get('/logout', (req, res) => {
+    console.log('🚪 Usuario cerrando sesión:', req.user ? req.user.username : 'Desconocido');
+    
+    req.logout((err) => {
+        if (err) {
+            console.error('❌ Error al cerrar sesión:', err);
+            return res.status(500).json({ error: 'Error al cerrar sesión' });
+        }
+        
+        req.session.destroy((err) => {
+            if (err) {
+                console.error('❌ Error destruyendo sesión:', err);
+            }
+            res.clearCookie('discord-auth-session');
+            res.redirect('/');
+        });
+    });
 });
-app.get('/logout', (req, res) => req.logout((err) => err ? res.status(500).json({ error: 'Error al cerrar sesión' }) : res.redirect('/')));
 
 // API Routes
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 app.get('/dashboard', requireAuth, (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
-app.get('/api/auth/status', (req, res) => {
-    if (req.isAuthenticated()) {
-        // Asegurar que el usuario existe en userData
-        if (!userData[req.user.id]) {
-            initUser(req.user.id, req.user.username, req.user.discriminator, req.user.avatar);
+app.get('/api/auth/status', async (req, res) => {
+    try {
+        console.log('🔍 Verificando estado de autenticación...');
+        console.log('Session ID:', req.sessionID);
+        console.log('Es autenticado:', req.isAuthenticated());
+        console.log('Usuario en sesión:', req.user ? req.user.username : 'Ninguno');
+        
+        if (req.isAuthenticated() && req.user) {
+            // Asegurar que el usuario existe en userData
+            if (!userData[req.user.id]) {
+                console.log('⚠️ Usuario autenticado pero no en userData, inicializando...');
+                await initUser(req.user.id, req.user.username, req.user.discriminator, req.user.avatar);
+            }
+            
+            const user = userData[req.user.id];
+            
+            const responseData = { 
+                authenticated: true, 
+                user: { 
+                    id: req.user.id, 
+                    username: user.username || req.user.username || 'Usuario', 
+                    discriminator: user.discriminator || req.user.discriminator || '0000', 
+                    avatar: user.avatar || req.user.avatar, 
+                    balance: user.balance || 1000, 
+                    totalBets: user.totalBets || 0, 
+                    wonBets: user.wonBets || 0, 
+                    lostBets: user.lostBets || 0, 
+                    totalWinnings: user.totalWinnings || 0 
+                } 
+            };
+            
+            console.log('✅ Usuario autenticado:', responseData.user.username);
+            res.json(responseData);
+        } else {
+            console.log('❌ Usuario no autenticado');
+            res.json({ authenticated: false });
         }
-        
-        const user = userData[req.user.id];
-        
-        res.json({ 
-            authenticated: true, 
-            user: { 
-                id: req.user.id, 
-                username: user.username || req.user.username || 'Usuario', 
-                discriminator: user.discriminator || req.user.discriminator || '0000', 
-                avatar: user.avatar || req.user.avatar, 
-                balance: user.balance || 1000, 
-                totalBets: user.totalBets || 0, 
-                wonBets: user.wonBets || 0, 
-                lostBets: user.lostBets || 0, 
-                totalWinnings: user.totalWinnings || 0 
-            } 
-        });
-    } else {
-        res.json({ authenticated: false });
+    } catch (error) {
+        console.error('❌ Error verificando estado:', error);
+        res.json({ authenticated: false, error: error.message });
     }
+});
+app.get('/debug/session', (req, res) => {
+    res.json({
+        sessionID: req.sessionID,
+        isAuthenticated: req.isAuthenticated(),
+        user: req.user,
+        session: req.session
+    });
 });
 
 app.post('/api/bet', requireAuth, (req, res) => {
@@ -483,7 +616,14 @@ app.get('/api/pending-matches', requireAuth, (req, res) => {
     
     res.json(pendingMatches);
 });
-
+app.get('/health', (req, res) => {
+    res.status(200).json({ 
+        status: 'OK', 
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime(),
+        environment: process.env.NODE_ENV || 'development'
+    });
+});
 // Bot Discord
 const client = new Discord.Client({ intents: [Discord.GatewayIntentBits.Guilds, Discord.GatewayIntentBits.GuildMessages, Discord.GatewayIntentBits.MessageContent] });
 
@@ -508,40 +648,53 @@ function saveData() {
 }
 
 function initUser(userId, username = null, discriminator = null, avatar = null) {
-    let needsSave = false;
-    
-    if (!userData[userId]) {
-        userData[userId] = { 
-            balance: 1000, 
-            totalBets: 0, 
-            wonBets: 0, 
-            lostBets: 0, 
-            totalWinnings: 0, 
-            username: username || 'Usuario',
-            discriminator: discriminator || '0000',
-            avatar: avatar
-        };
-        needsSave = true;
-        console.log(`👤 Nuevo usuario creado: ${username || 'Usuario'} - Balance inicial: 1000`);
-    } else {
-        // Actualizar datos si ya existe el usuario pero con nueva info
-        if (username && userData[userId].username !== username) {
-            userData[userId].username = username;
+    return new Promise((resolve) => {
+        let needsSave = false;
+        
+        console.log(`🔄 Inicializando usuario: ${userId} - ${username}`);
+        
+        if (!userData[userId]) {
+            userData[userId] = { 
+                balance: 1000, 
+                totalBets: 0, 
+                wonBets: 0, 
+                lostBets: 0, 
+                totalWinnings: 0, 
+                username: username || 'Usuario',
+                discriminator: discriminator || '0000',
+                avatar: avatar || null
+            };
             needsSave = true;
+            console.log(`👤 Nuevo usuario creado: ${username || 'Usuario'} - Balance inicial: 1000`);
+        } else {
+            // Actualizar datos si ya existe el usuario pero con nueva info
+            let updated = false;
+            
+            if (username && userData[userId].username !== username) {
+                userData[userId].username = username;
+                updated = true;
+            }
+            if (discriminator && userData[userId].discriminator !== discriminator) {
+                userData[userId].discriminator = discriminator;
+                updated = true;
+            }
+            if (avatar && userData[userId].avatar !== avatar) {
+                userData[userId].avatar = avatar;
+                updated = true;
+            }
+            
+            if (updated) {
+                needsSave = true;
+                console.log(`🔄 Usuario actualizado: ${username || userData[userId].username}`);
+            }
         }
-        if (discriminator && userData[userId].discriminator !== discriminator) {
-            userData[userId].discriminator = discriminator;
-            needsSave = true;
+        
+        if (needsSave) {
+            saveData();
         }
-        if (avatar && userData[userId].avatar !== avatar) {
-            userData[userId].avatar = avatar;
-            needsSave = true;
-        }
-    }
-    
-    if (needsSave) {
-        saveData();
-    }
+        
+        resolve(userData[userId]);
+    });
 }
 
 function calculateOdds(team1, team2) {
