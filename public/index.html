@@ -635,7 +635,7 @@
             gap: 0.5rem;
             margin: 1rem 0;
         }
-
+        
         .result-btn {
             padding: 0.8rem;
             border: 2px solid #e0e0e0;
@@ -1080,17 +1080,30 @@ border-left: 4px solid transparent;
 }
 
         .close {
-            position: absolute;
-            right: 1rem;
-            top: 1rem;
-            font-size: 1.5rem;
-            cursor: pointer;
-            color: #666;
-        }
+    position: absolute;
+    right: 1rem;
+    top: 1rem;
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: #666;
+    /* AGREGAR ESTOS ESTILOS: */
+    z-index: 1001;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.9);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    transition: all 0.3s ease;
+}
 
-        .close:hover {
-            color: #ff6600;
-        }
+.close:hover {
+    color: #ff6600;
+    background: rgba(255, 102, 0, 0.1);
+    transform: scale(1.1);
+}
 
         .bet-form {
             display: flex;
@@ -1103,7 +1116,22 @@ border-left: 4px solid transparent;
             grid-template-columns: 1fr 1fr 1fr;
             gap: 0.5rem;
         }
-
+@media (max-width: 768px) {
+    .close {
+        right: 0.5rem;
+        top: 0.5rem;
+        width: 44px;
+        height: 44px;
+        font-size: 1.8rem;
+        background: rgba(255, 255, 255, 0.95);
+        border: 2px solid rgba(255, 102, 0, 0.2);
+    }
+    
+    .close:active {
+        transform: scale(0.95);
+        background: rgba(255, 102, 0, 0.2);
+    }
+}
 .prediction-btn {
     padding: 1.2rem 1rem;
     border: 2px solid #d0d7dd;
@@ -1844,6 +1872,186 @@ letter-spacing: 0.3px;
         padding: 0.6rem;
     }
 }
+    /* NUEVOS ESTILOS PARA TIPOS DE GOLES */
+.goal-types-section {
+    background: #f8f9fa;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    padding: 1.2rem;
+    margin: 1rem 0;
+}
+
+.goal-types-title {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #333;
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid #28a745;
+}
+
+.goal-types-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 0.8rem;
+}
+
+.goal-type-item {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    padding: 0.8rem;
+    background: white;
+    border: 2px solid #e9ecef;
+    border-radius: 6px;
+    transition: all 0.3s ease;
+    cursor: pointer;
+    position: relative;
+}
+
+.goal-type-item:hover {
+    border-color: #28a745;
+    background: #f8fff8;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(40, 167, 69, 0.15);
+}
+
+.goal-type-item.checked {
+    border-color: #28a745;
+    background: linear-gradient(135deg, #28a745, #20c997);
+    color: white;
+    box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);
+}
+
+.goal-type-checkbox {
+    width: 18px;
+    height: 18px;
+    border: 2px solid #6c757d;
+    border-radius: 3px;
+    background: white;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    position: relative;
+    flex-shrink: 0;
+}
+
+.goal-type-item.checked .goal-type-checkbox {
+    background: white;
+    border-color: white;
+}
+
+.goal-type-checkbox::after {
+    content: '✓';
+    position: absolute;
+    top: -2px;
+    left: 1px;
+    font-size: 14px;
+    font-weight: bold;
+    color: #28a745;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.goal-type-item.checked .goal-type-checkbox::after {
+    opacity: 1;
+    color: #28a745;
+}
+
+.goal-type-label {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #495057;
+    user-select: none;
+    cursor: pointer;
+}
+
+.goal-type-item.checked .goal-type-label {
+    color: white;
+}
+
+.goal-type-icon {
+    font-size: 1.1rem;
+    margin-right: 0.2rem;
+    opacity: 0.8;
+}
+
+.goal-type-item.checked .goal-type-icon {
+    opacity: 1;
+}
+
+/* SECCIÓN DE ESTADÍSTICAS ADICIONALES */
+.additional-stats {
+    background: #f1f3f4;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    padding: 1.2rem;
+    margin: 1rem 0;
+}
+
+.additional-stats-title {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #333;
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid #6f42c1;
+}
+
+.stats-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin-bottom: 0.8rem;
+}
+
+.stat-input-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+}
+
+.stat-input-label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #495057;
+}
+
+.stat-input {
+    padding: 0.6rem;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    font-size: 0.9rem;
+    background: white;
+    color: #495057;
+}
+
+.stat-input:focus {
+    outline: none;
+    border-color: #6f42c1;
+    box-shadow: 0 0 0 2px rgba(111, 66, 193, 0.1);
+}
+
+/* RESPONSIVE ADICIONAL */
+@media (max-width: 768px) {
+    .goal-types-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .stats-row {
+        grid-template-columns: 1fr;
+    }
+    
+    .admin-panel {
+        max-height: 80vh;
+        overflow-y: auto;
+    }
+}
     </style>
 </head>
 <body>
@@ -2088,7 +2296,83 @@ letter-spacing: 0.3px;
                                     </div>
                                 </div>
                             </div>
+                            <!-- NUEVA SECCIÓN: Tipos de Goles -->
+<div class="goal-types-section">
+    <h4 class="goal-types-title">
+        <span>⚽</span>
+        Tipos de Goles en el Partido
+    </h4>
+    <div class="goal-types-grid">
+        <div class="goal-type-item" data-goal-type="corner">
+            <div class="goal-type-checkbox"></div>
+            <span class="goal-type-icon">🚩</span>
+            <span class="goal-type-label">Gol de Córner</span>
+        </div>
+        <div class="goal-type-item" data-goal-type="libre">
+            <div class="goal-type-checkbox"></div>
+            <span class="goal-type-icon">🎯</span>
+            <span class="goal-type-label">Gol de Tiro Libre</span>
+        </div>
+        <div class="goal-type-item" data-goal-type="chilena">
+            <div class="goal-type-checkbox"></div>
+            <span class="goal-type-icon">🤸</span>
+            <span class="goal-type-label">Gol de Chilena</span>
+        </div>
+        <div class="goal-type-item" data-goal-type="cabeza">
+            <div class="goal-type-checkbox"></div>
+            <span class="goal-type-icon">🧠</span>
+            <span class="goal-type-label">Gol de Cabeza</span>
+        </div>
+        <div class="goal-type-item" data-goal-type="delantero">
+            <div class="goal-type-checkbox"></div>
+            <span class="goal-type-icon">⚡</span>
+            <span class="goal-type-label">Gol de Delantero</span>
+        </div>
+        <div class="goal-type-item" data-goal-type="medio">
+            <div class="goal-type-checkbox"></div>
+            <span class="goal-type-icon">🎪</span>
+            <span class="goal-type-label">Gol de Mediocampista</span>
+        </div>
+        <div class="goal-type-item" data-goal-type="defensa">
+            <div class="goal-type-checkbox"></div>
+            <span class="goal-type-icon">🛡️</span>
+            <span class="goal-type-label">Gol de Defensa</span>
+        </div>
+        <div class="goal-type-item" data-goal-type="arquero">
+            <div class="goal-type-checkbox"></div>
+            <span class="goal-type-icon">🥅</span>
+            <span class="goal-type-label">Gol de Arquero</span>
+        </div>
+    </div>
+</div>
 
+<!-- NUEVA SECCIÓN: Estadísticas Adicionales -->
+<div class="additional-stats">
+    <h4 class="additional-stats-title">
+        <span>📊</span>
+        Estadísticas Adicionales
+    </h4>
+    <div class="stats-row">
+        <div class="stat-input-group">
+            <label class="stat-input-label">Tarjetas Amarillas</label>
+            <input type="number" class="stat-input" min="0" max="15" placeholder="0">
+        </div>
+        <div class="stat-input-group">
+            <label class="stat-input-label">Tarjetas Rojas</label>
+            <input type="number" class="stat-input" min="0" max="11" placeholder="0">
+        </div>
+    </div>
+    <div class="stats-row">
+        <div class="stat-input-group">
+            <label class="stat-input-label">Córners Totales</label>
+            <input type="number" class="stat-input" min="0" max="20" placeholder="0">
+        </div>
+        <div class="stat-input-group">
+            <label class="stat-input-label">Faltas Totales</label>
+            <input type="number" class="stat-input" min="0" max="50" placeholder="0">
+        </div>
+    </div>
+</div>
                             <div class="form-group">
                                 <label class="form-label">Marcador Final:</label>
                                 <div class="score-inputs">
@@ -2316,7 +2600,38 @@ letter-spacing: 0.3px;
         
         return displayNameMap[normalizedTournament] || tournament;
     }
+// Funcionalidad para tipos de goles
+document.querySelectorAll('.goal-type-item').forEach(item => {
+    item.addEventListener('click', function() {
+        this.classList.toggle('checked');
+    });
+});
 
+// Modificar la función existente de envío de resultados para incluir los nuevos datos
+function submitCompleteResult() {
+    // Recopilar tipos de goles seleccionados
+    const selectedGoalTypes = [];
+    document.querySelectorAll('.goal-type-item.checked').forEach(item => {
+        selectedGoalTypes.push(item.dataset.goalType);
+    });
+    
+    // Recopilar estadísticas adicionales
+    const additionalStats = {};
+    document.querySelectorAll('.stat-input').forEach(input => {
+        const label = input.parentElement.querySelector('.stat-input-label').textContent;
+        additionalStats[label] = parseInt(input.value) || 0;
+    });
+    
+    // Agregar a tu objeto de datos existente
+    const completeMatchData = {
+        // ... tus datos existentes ...
+        goalTypes: selectedGoalTypes,
+        additionalStats: additionalStats
+    };
+    
+    console.log('Datos completos del partido:', completeMatchData);
+    // Enviar al servidor...
+}
     // Función mejorada para obtener clase CSS del torneo
     function getTournamentClassFixed(tournament) {
         if (!tournament) return 'tournament-default';
