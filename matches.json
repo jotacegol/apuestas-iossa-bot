@@ -1,0 +1,128 @@
+{
+  "1753683292014": {
+    "id": "1753683292014",
+    "team1": "Aimstar (D1)",
+    "team2": "Dream Seven (D1)",
+    "odds": {
+      "team1": 2.14,
+      "draw": 4.32,
+      "team2": 2.82
+    },
+    "matchTime": "2025-07-28T12:26:12.432Z",
+    "status": "finished",
+    "bets": [
+      "175377200526721m71",
+      "1753772092216714wg"
+    ],
+    "isCustom": true,
+    "result": "team1",
+    "score": "4-2"
+  },
+  "1753778818162": {
+    "id": "1753778818162",
+    "team1": "Deportivo Tarrito (D2)",
+    "team2": "Freestyle Master Soccer (D1)",
+    "odds": {
+      "team1": 3.8,
+      "draw": 6.33,
+      "team2": 1.65
+    },
+    "matchTime": "2025-07-29T15:53:17.420Z",
+    "status": "finished",
+    "bets": [
+      "1753780097145cl6i7"
+    ],
+    "result": "draw",
+    "score": "0-0"
+  },
+  "1753780040549": {
+    "id": "1753780040549",
+    "team1": "Escuderos de la Birra (MARADEI)",
+    "team2": "Pibes Chorros Society (MARADEI)",
+    "odds": {
+      "team1": 1.92,
+      "draw": 4.32,
+      "team2": 3.32
+    },
+    "matchTime": "2025-07-30T06:30:18.920Z",
+    "status": "finished",
+    "bets": [],
+    "isCustom": true,
+    "tournament": "maradei",
+    "result": "team1",
+    "score": "3-1"
+  },
+  "1753811130577": {
+    "id": "1753811130577",
+    "team1": "Aimstar (D1)",
+    "team2": "Dream Seven (D1)",
+    "odds": {
+      "team1": 2.14,
+      "draw": 4.32,
+      "team2": 2.82
+    },
+    "matchTime": "2025-07-30T15:30:43.403Z",
+    "status": "finished",
+    "bets": [
+      "1753811461321069wq"
+    ],
+    "isCustom": true,
+    "tournament": "d1",
+    "result": "draw",
+    "score": "0-0"
+  },
+  "1753818107415": {
+    "id": "1753818107415",
+    "team1": "Aimstar (D1)",
+    "team2": "Freestyle Master Soccer (D1)",
+    "odds": {
+      "team1": 2.14,
+      "draw": 4.32,
+      "team2": 2.82
+    },
+    "matchTime": "2025-07-29T23:02:10.487Z",
+    "status": "upcoming",
+    "bets": [],
+    "isCustom": true,
+    "tournament": "d1"
+  },
+  "1753819854684": {
+    "id": "1753819854684",
+    "team1": "La Fabrica (D2)",
+    "team2": "The New Vorpal (D2)",
+    "odds": {
+      "team1": 10.86,
+      "draw": 4.32,
+      "team2": 1.37
+    },
+    "matchTime": "2025-07-30T19:36:13.064Z",
+    "status": "upcoming",
+    "bets": []
+  },
+  "1753834990226": {
+    "id": "1753834990226",
+    "team1": "Zenith (D3)",
+    "team2": "Freestyle Master Soccer (D1)",
+    "odds": {
+      "team1": 3.8,
+      "draw": 6.33,
+      "team2": 1.65
+    },
+    "matchTime": "2025-07-30T04:58:42.240Z",
+    "status": "upcoming",
+    "bets": []
+  },
+  "1753838590232": {
+    "id": "1753838590232",
+    "team1": "Club Atletico Bobis (MARADEI)",
+    "team2": "Escuderos de la Birra (MARADEI)",
+    "odds": {
+      "team1": 4.13,
+      "draw": 4.32,
+      "team2": 1.73
+    },
+    "matchTime": "2025-07-30T18:54:59.506Z",
+    "status": "upcoming",
+    "bets": []
+  }
+}

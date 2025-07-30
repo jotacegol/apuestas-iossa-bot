@@ -1,0 +1,46 @@
+{
+  "175377200526721m71": {
+    "id": "175377200526721m71",
+    "userId": "438147217702780939",
+    "matchId": "1753683292014",
+    "prediction": "team1",
+    "amount": 200,
+    "odds": 2.14,
+    "status": "won",
+    "timestamp": "2025-07-29T06:53:25.267Z",
+    "result": "team1"
+  },
+  "1753772092216714wg": {
+    "id": "1753772092216714wg",
+    "userId": "438147217702780939",
+    "matchId": "1753683292014",
+    "prediction": "team2",
+    "amount": 100,
+    "odds": 2.82,
+    "status": "lost",
+    "timestamp": "2025-07-29T06:54:52.216Z",
+    "result": "team1"
+  },
+  "1753780097145cl6i7": {
+    "id": "1753780097145cl6i7",
+    "userId": "438147217702780939",
+    "matchId": "1753778818162",
+    "prediction": "draw",
+    "amount": 1128,
+    "odds": 6.33,
+    "status": "won",
+    "timestamp": "2025-07-29T09:08:17.145Z",
+    "result": "draw"
+  },
+  "1753811461321069wq": {
+    "id": "1753811461321069wq",
+    "userId": "438147217702780939",
+    "matchId": "1753811130577",
+    "prediction": "draw",
+    "amount": 7140,
+    "odds": 4.32,
+    "status": "won",
+    "timestamp": "2025-07-29T17:51:01.321Z",
+    "result": "draw"
+  }
+}
