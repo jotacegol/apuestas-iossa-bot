@@ -2052,6 +2052,74 @@ letter-spacing: 0.3px;
         overflow-y: auto;
     }
 }
+/* ===== ESTILOS PARA SECCIONES EN MANTENIMIENTO ===== */
+.maintenance-section {
+    position: relative;
+    opacity: 0.5;
+    pointer-events: none;
+    user-select: none;
+}
+
+.maintenance-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(135deg, rgba(108, 117, 125, 0.95), rgba(73, 80, 87, 0.9));
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    z-index: 10;
+    backdrop-filter: blur(2px);
+}
+
+.maintenance-icon {
+    font-size: 3rem;
+    color: #ffc107;
+    margin-bottom: 0.5rem;
+    animation: pulse-maintenance 2s infinite;
+}
+
+.maintenance-text {
+    color: white;
+    font-weight: 700;
+    font-size: 1.1rem;
+    text-align: center;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+    margin-bottom: 0.3rem;
+}
+
+.maintenance-subtext {
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 0.9rem;
+    text-align: center;
+    font-weight: 500;
+}
+
+@keyframes pulse-maintenance {
+    0%, 100% { 
+        opacity: 1; 
+        transform: scale(1);
+    }
+    50% { 
+        opacity: 0.7; 
+        transform: scale(1.05);
+    }
+}
+
+/* Para admins - remover el bloqueo */
+.is-admin .maintenance-section {
+    opacity: 1;
+    pointer-events: all;
+    user-select: auto;
+}
+
+.is-admin .maintenance-overlay {
+    display: none;
+}
     </style>
 </head>
 <body>
@@ -2403,16 +2471,16 @@ letter-spacing: 0.3px;
         
         <!-- Pestañas del modal -->
         <div class="bet-tabs">
-            <button class="bet-tab active" onclick="switchBetTab('simple')">
-                🎯 Apuesta Simple
-            </button>
-            <button class="bet-tab" onclick="switchBetTab('exact')">
-                🎲 Resultado Exacto
-            </button>
-            <button class="bet-tab" onclick="switchBetTab('special')">
-                ⭐ Apuestas Especiales
-            </button>
-        </div>
+    <button class="bet-tab active" data-tab="prediction">Resultado</button>
+    <button class="bet-tab maintenance-tab" data-tab="exact-score">
+        🔒 Exacto
+        <span style="font-size: 0.7rem; margin-left: 5px;">🔧</span>
+    </button>
+    <button class="bet-tab maintenance-tab" data-tab="special">
+        🔒 Especiales
+        <span style="font-size: 0.7rem; margin-left: 5px;">🔧</span>
+    </button>
+</div>
 
         <form id="bet-form" class="bet-form">
             <div class="form-group">
@@ -2431,13 +2499,18 @@ letter-spacing: 0.3px;
             </div>
             
             <!-- PESTAÑA RESULTADO EXACTO -->
-            <div id="exact-tab" class="bet-tab-content">
-                <div class="form-group">
-                    <label class="form-label">Selecciona el resultado exacto:</label>
-                    <div id="exact-score-grid" class="exact-score-grid">
-                        <!-- Se llena dinámicamente -->
-                    </div>
-                </div>
+            <div class="bet-tab-content" id="exact-score-content">
+    <div class="maintenance-section">
+        <div class="exact-score-grid">
+            <!-- contenido existente -->
+        </div>
+        <div class="maintenance-overlay">
+            <div class="maintenance-icon">🔒🔧</div>
+            <div class="maintenance-text">SECCIÓN EN MANTENIMIENTO</div>
+            <div class="maintenance-subtext">Solo disponible para administradores</div>
+        </div>
+    </div>
+</div>
                 
                 <div class="form-group">
                     <label class="form-label">O introduce un resultado personalizado:</label>
@@ -2451,86 +2524,18 @@ letter-spacing: 0.3px;
             </div>
             
             <!-- PESTAÑA APUESTAS ESPECIALES -->
-            <div id="special-tab" class="bet-tab-content">
-                <div class="form-group">
-                    <label class="form-label">Selecciona tus apuestas especiales:</label>
-                    
-                    <div class="special-categories">
-                        <!-- Categoría: Goles -->
-                        <div class="special-category">
-                            <h4 class="category-title">⚽ Apuestas de Goles</h4>
-                            <div class="special-options-grid">
-                                <div class="special-option" data-type="both_teams_score">
-                                    <div class="special-name">Ambos equipos marcan</div>
-                                    <div class="special-odds">1.10</div>
-                                </div>
-                                <div class="special-option" data-type="total_goals_over_2_5">
-                                    <div class="special-name">Más de 2.5 goles</div>
-                                    <div class="special-odds">1.35</div>
-                                </div>
-                                <div class="special-option" data-type="total_goals_under_2_5">
-                                    <div class="special-name">Menos de 2.5 goles</div>
-                                    <div class="special-odds">2.25</div>
-                                </div>
-                                <div class="special-option" data-type="home_goals_over_1_5">
-                                    <div class="special-name">Local +1.5 goles</div>
-                                    <div class="special-odds">1.25</div>
-                                </div>
-                                <div class="special-option" data-type="away_goals_over_1_5">
-                                    <div class="special-name">Visitante +1.5 goles</div>
-                                    <div class="special-odds">1.25</div>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- Categoría: Tipos de gol -->
-                        <div class="special-category">
-                            <h4 class="category-title">🎯 Tipos de Gol</h4>
-                            <div class="special-options-grid">
-                                <div class="special-option" data-type="corner_goal">
-                                    <div class="special-name">Gol de córner</div>
-                                    <div class="special-odds">8.5</div>
-                                </div>
-                                <div class="special-option" data-type="free_kick_goal">
-                                    <div class="special-name">Gol de tiro libre</div>
-                                    <div class="special-odds">6.0</div>
-                                </div>
-                                <div class="special-option" data-type="header_goal">
-                                    <div class="special-name">Gol de cabeza</div>
-                                    <div class="special-odds">3.2</div>
-                                </div>
-                                <div class="special-option" data-type="bicycle_kick_goal">
-                                    <div class="special-name">Gol de chilena</div>
-                                    <div class="special-odds">35.0</div>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- Categoría: Posiciones -->
-                        <div class="special-category">
-                            <h4 class="category-title">👥 Goles por Posición</h4>
-                            <div class="special-options-grid">
-                                <div class="special-option" data-type="striker_goal">
-                                    <div class="special-name">Gol de delantero</div>
-                                    <div class="special-odds">1.6</div>
-                                </div>
-                                <div class="special-option" data-type="midfielder_goal">
-                                    <div class="special-name">Gol de mediocampista</div>
-                                    <div class="special-odds">2.8</div>
-                                </div>
-                                <div class="special-option" data-type="defender_goal">
-                                    <div class="special-name">Gol de defensa</div>
-                                    <div class="special-odds">6.5</div>
-                                </div>
-                                <div class="special-option" data-type="goalkeeper_goal">
-                                    <div class="special-name">Gol de arquero</div>
-                                    <div class="special-odds">75.0</div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
+            <div class="bet-tab-content" id="special-content">
+    <div class="maintenance-section">
+        <div class="special-categories">
+            <!-- contenido existente -->
+        </div>
+        <div class="maintenance-overlay">
+            <div class="maintenance-icon">🔒🔧</div>
+            <div class="maintenance-text">SECCIÓN EN MANTENIMIENTO</div>
+            <div class="maintenance-subtext">Solo disponible para administradores</div>
+        </div>
+    </div>
+</div>
             
             <!-- CANTIDAD DE APUESTA (común para todas las pestañas) -->
             <div class="form-group">
@@ -3347,10 +3352,17 @@ socket.on('update', (update) => {
     function switchBetTab(tabType) {
     currentBetType = tabType;
     
-    // Actualizar botones de pestaña
     document.querySelectorAll('.bet-tab').forEach(tab => {
-        tab.classList.remove('active');
+    tab.addEventListener('click', function() {
+        // AGREGAR ESTA VALIDACIÓN AL INICIO:
+        if (tab.classList.contains('maintenance-tab') && !isAdmin()) {
+            showNotification('Esta sección está en mantenimiento. Solo disponible para administradores.', 'info');
+            return; // Detener la ejecución
+        }
+        
+        // ... resto del código original para cambiar pestañas
     });
+});
     
     // Ocultar todo el contenido de pestañas
     document.querySelectorAll('.bet-tab-content').forEach(content => {
