@@ -431,82 +431,82 @@ app.post('/api/bet/special', requireAuth, (req, res) => {
         betOdds = calculateExactScoreOdds(match, { home, away });
         betDescription = `Resultado exacto ${home}-${away}`;
         betData = { type: 'exact_score', exactScore: { home, away } };
+        
     } else if (betType === 'special') {
-    const specialType = data.specialType;
-    const specialNames = {
-        'both_teams_score': 'Ambos equipos marcan',
-        'total_goals_over_2_5': 'Más de 2.5 goles',
-        'total_goals_under_2_5': 'Menos de 2.5 goles',
-        'home_goals_over_1_5': `Más de 1.5 goles ${match.team1.split(' (')[0]}`,
-        'away_goals_over_1_5': `Más de 1.5 goles ${match.team2.split(' (')[0]}`,
-        'corner_goal': 'Gol de córner',
-        'free_kick_goal': 'Gol de tiro libre',
-        'bicycle_kick_goal': 'Gol de chilena',
-        'header_goal': 'Gol de cabeza',
-        'striker_goal': 'Gol de delantero',
-        'midfielder_goal': 'Gol de mediocampista',
-        'defender_goal': 'Gol de defensa',
-        'goalkeeper_goal': 'Gol de arquero'
-    };
-    
-    if (!specialNames[specialType]) {
-        return res.status(400).json({ error: 'Tipo de apuesta especial no válido' });
-    }
-    
-    betOdds = calculateSpecialOdds(match, specialType);
-    betDescription = specialNames[specialType];
-    betData = { type: 'special', specialType };
-
-} else if (betType === 'special_combined') {
-    // AGREGAR este nuevo caso para apuestas especiales combinadas
-    const specialBets = data.specialBets;
-    
-    if (!Array.isArray(specialBets) || specialBets.length === 0) {
-        return res.status(400).json({ error: 'Debe incluir al menos una apuesta especial' });
-    }
-    
-    const specialNames = {
-        'both_teams_score': 'Ambos equipos marcan',
-        'total_goals_over_2_5': 'Más de 2.5 goles',
-        'total_goals_under_2_5': 'Menos de 2.5 goles',
-        'home_goals_over_1_5': `Más de 1.5 goles ${match.team1.split(' (')[0]}`,
-        'away_goals_over_1_5': `Más de 1.5 goles ${match.team2.split(' (')[0]}`,
-        'corner_goal': 'Gol de córner',
-        'free_kick_goal': 'Gol de tiro libre',
-        'bicycle_kick_goal': 'Gol de chilena',
-        'header_goal': 'Gol de cabeza',
-        'striker_goal': 'Gol de delantero',
-        'midfielder_goal': 'Gol de mediocampista',
-        'defender_goal': 'Gol de defensa',
-        'goalkeeper_goal': 'Gol de arquero'
-    };
-    
-    // Validar todos los tipos especiales
-    for (const specialType of specialBets) {
+        const specialType = data.specialType;
+        const specialNames = {
+            'both_teams_score': 'Ambos equipos marcan',
+            'total_goals_over_2_5': 'Más de 2.5 goles',
+            'total_goals_under_2_5': 'Menos de 2.5 goles',
+            'home_goals_over_1_5': `Más de 1.5 goles ${match.team1.split(' (')[0]}`,
+            'away_goals_over_1_5': `Más de 1.5 goles ${match.team2.split(' (')[0]}`,
+            'corner_goal': 'Gol de córner',
+            'free_kick_goal': 'Gol de tiro libre',
+            'bicycle_kick_goal': 'Gol de chilena',
+            'header_goal': 'Gol de cabeza',
+            'striker_goal': 'Gol de delantero',
+            'midfielder_goal': 'Gol de mediocampista',
+            'defender_goal': 'Gol de defensa',
+            'goalkeeper_goal': 'Gol de arquero'
+        };
+        
         if (!specialNames[specialType]) {
-            return res.status(400).json({ error: `Tipo de apuesta especial no válido: ${specialType}` });
+            return res.status(400).json({ error: 'Tipo de apuesta especial no válido' });
         }
-    }
-    
-    // Calcular cuota combinada (multiplicar todas las cuotas)
-    betOdds = specialBets.reduce((total, specialType) => {
-        return total * calculateSpecialOdds(match, specialType);
-    }, 1.0);
-    
-    // Crear descripción combinada
-    betDescription = specialBets.map(type => specialNames[type]).join(' + ');
-    betData = { 
-        type: 'special_combined', 
-        specialBets: specialBets.map(type => ({
-            type,
-            name: specialNames[type],
-            odds: calculateSpecialOdds(match, type)
-        }))
-    };
+        
+        betOdds = calculateSpecialOdds(match, specialType);
+        betDescription = specialNames[specialType];
+        betData = { type: 'special', specialType };
 
-} else {
-    return res.status(400).json({ error: 'Tipo de apuesta no válido' });
-}
+    } else if (betType === 'special_combined') {
+        const specialBets = data.specialBets;
+        
+        if (!Array.isArray(specialBets) || specialBets.length === 0) {
+            return res.status(400).json({ error: 'Debe incluir al menos una apuesta especial' });
+        }
+        
+        const specialNames = {
+            'both_teams_score': 'Ambos equipos marcan',
+            'total_goals_over_2_5': 'Más de 2.5 goles',
+            'total_goals_under_2_5': 'Menos de 2.5 goles',
+            'home_goals_over_1_5': `Más de 1.5 goles ${match.team1.split(' (')[0]}`,
+            'away_goals_over_1_5': `Más de 1.5 goles ${match.team2.split(' (')[0]}`,
+            'corner_goal': 'Gol de córner',
+            'free_kick_goal': 'Gol de tiro libre',
+            'bicycle_kick_goal': 'Gol de chilena',
+            'header_goal': 'Gol de cabeza',
+            'striker_goal': 'Gol de delantero',
+            'midfielder_goal': 'Gol de mediocampista',
+            'defender_goal': 'Gol de defensa',
+            'goalkeeper_goal': 'Gol de arquero'
+        };
+        
+        // Validar todos los tipos especiales
+        for (const specialType of specialBets) {
+            if (!specialNames[specialType]) {
+                return res.status(400).json({ error: `Tipo de apuesta especial no válido: ${specialType}` });
+            }
+        }
+        
+        // Calcular cuota combinada (multiplicar todas las cuotas)
+        betOdds = specialBets.reduce((total, specialType) => {
+            return total * calculateSpecialOdds(match, specialType);
+        }, 1.0);
+        
+        // CORRECCIÓN: Crear descripción y datos correctamente
+        betDescription = specialBets.map(type => specialNames[type]).join(' + ');
+        betData = { 
+            type: 'special_combined', 
+            specialBets: specialBets.map(type => ({
+                type: type,  // IMPORTANTE: usar 'type' en lugar de variables inconsistentes
+                name: specialNames[type],
+                odds: calculateSpecialOdds(match, type)
+            }))
+        };
+
+    } else {
+        return res.status(400).json({ error: 'Tipo de apuesta no válido' });
+    }
     
     const betId = Date.now().toString() + Math.random().toString(36).substr(2, 5);
     
@@ -566,10 +566,10 @@ app.get('/api/finished-matches', (req, res) => {
 
 // API para establecer resultado manual (solo para usuarios autenticados)
 app.post('/api/set-result', requireAuth, (req, res) => {
-    const { matchId, result, score1, score2 } = req.body;
+    const { matchId, result, score1, score2, specialEvents = [] } = req.body;
     
-    // Verificar que el usuario tiene permisos (puedes agregar verificación de admin aquí)
-    const adminIds = ['438147217702780939']; // Mismo ID que en el bot
+    // Verificar que el usuario tiene permisos
+    const adminIds = ['438147217702780939'];
     if (!adminIds.includes(req.user.id)) {
         return res.status(403).json({ error: 'No tienes permisos para establecer resultados' });
     }
@@ -607,6 +607,19 @@ app.post('/api/set-result', requireAuth, (req, res) => {
         return res.status(400).json({ error: 'Para empate, ambos equipos deben tener el mismo marcador.' });
     }
     
+    // CORRECCIÓN: Procesar correctamente los eventos especiales desde la web
+    const specialResults = {};
+    if (Array.isArray(specialEvents)) {
+        specialEvents.forEach(event => {
+            // Los eventos ya vienen con el nombre correcto desde el frontend
+            specialResults[event] = true;
+        });
+    }
+    
+    console.log('🔍 Estableciendo resultado desde web:');
+    console.log('   Marcador:', `${goals1}-${goals2}`);
+    console.log('   Eventos especiales:', specialResults);
+    
     // Establecer resultado
     match.status = 'finished';
     match.result = result;
@@ -616,15 +629,16 @@ app.post('/api/set-result', requireAuth, (req, res) => {
         score: `${goals1}-${goals2}`, 
         timestamp: new Date().toISOString(), 
         isManual: true,
-        setBy: req.user.id
+        setBy: req.user.id,
+        specialResults 
     };
     
-    // Procesar apuestas
-    processMatchBets(matchId, result);
+    // Procesar apuestas con los eventos especiales
+    processMatchBets(matchId, result, goals1, goals2, specialResults);
     saveData();
     
     // Notificar a todos los clientes conectados
-    broadcastUpdate('match-result', { matchId, result, score: `${goals1}-${goals2}`, isManual: true });
+    broadcastUpdate('match-result', { matchId, result, score: `${goals1}-${goals2}`, isManual: true, specialResults });
     
     res.json({ 
         success: true, 
@@ -634,7 +648,8 @@ app.post('/api/set-result', requireAuth, (req, res) => {
             team2: match.team2.split(' (')[0],
             result: match.result,
             score: match.score,
-            isManual: true
+            isManual: true,
+            specialResults
         }
     });
 });
@@ -1021,7 +1036,8 @@ async function scrapeIOSoccerTeams(league = 'd1') {
                     }
                 }
                 
-                if (teamName && !isNaN(position) && position > 0) {
+                // CORRECCIÓN: Validación más robusta
+                if (teamName && teamName.length > 0 && !isNaN(position) && position > 0) {
                     scrapedTeams[`${teamName} (${league.toUpperCase()})`] = { 
                         position, 
                         lastFiveMatches, 
@@ -1029,11 +1045,18 @@ async function scrapeIOSoccerTeams(league = 'd1') {
                         tournament: TOURNAMENT_NAMES[league],
                         originalName: teamName 
                     };
+                } else {
+                    console.log(`⚠️ Datos inválidos para fila ${index}: teamName="${teamName}", position="${position}"`);
                 }
             } catch (error) { 
                 console.log(`⚠️ Error procesando fila ${index} en ${league}:`, error.message); 
             }
         });
+        
+        // CORRECCIÓN: Verificar que obtuvimos al menos algunos equipos
+        if (Object.keys(scrapedTeams).length === 0) {
+            console.log(`⚠️ No se encontraron equipos en ${league}, posible cambio en la estructura del sitio`);
+        }
         
         return scrapedTeams;
     } catch (error) { 
@@ -1312,6 +1335,8 @@ function setManualResult(matchId, result, score1, score2, specialResults = {}) {
         specialResults 
     };
     
+    console.log('🔍 setManualResult - Procesando con eventos especiales:', specialResults);
+    
     processMatchBets(matchId, result, score1, score2, specialResults);
     saveData();
     return { success: true, match, result, score: `${score1}-${score2}` };
@@ -1321,25 +1346,35 @@ function processMatchBets(matchId, result, goals1 = null, goals2 = null, special
     const match = matches[matchId];
     if (!match.bets) return;
     
+    console.log(`🔍 Procesando apuestas para partido ${matchId}:`);
+    console.log(`   Resultado: ${result}, Marcador: ${goals1}-${goals2}`);
+    console.log(`   Eventos especiales:`, specialResults);
+    
     for (let betId of match.bets) {
         const bet = bets[betId];
         if (!bet) continue;
         
         let won = false;
         
-        if (bet.betType === 'simple') {
-            won = bet.prediction === result;
-        } else if (bet.betType === 'exact_score' && goals1 !== null && goals2 !== null) {
+        console.log(`🎯 Procesando apuesta ${betId}:`);
+        console.log(`   Tipo: ${bet.betType || 'simple'}`);
+        console.log(`   Descripción: ${bet.description || bet.prediction}`);
+        
+        if (bet.betType === 'exact_score' && goals1 !== null && goals2 !== null) {
             won = bet.exactScore.home === goals1 && bet.exactScore.away === goals2;
-        } else if (bet.betType === 'special' && specialResults) {
-            won = checkSpecialBets([{ specialType: bet.specialType }], goals1, goals2, specialResults);
-        } else if (bet.betType === 'special_combined' && specialResults) {
-            won = checkSpecialBets(bet.specialBets, goals1, goals2, specialResults);
-        } else if (bet.betType === 'combined') {
-            won = checkCombinedBets(bet.combinedBets, result, goals1, goals2, specialResults);
+            console.log(`   Exacto ${bet.exactScore.home}-${bet.exactScore.away} vs ${goals1}-${goals2}: ${won ? 'GANÓ' : 'PERDIÓ'}`);
+        } else if (bet.betType === 'special' && bet.specialType) {
+            won = checkSpecialBets(bet.specialType, goals1, goals2, specialResults);
+            console.log(`   Especial ${bet.specialType}: ${won ? 'GANÓ' : 'PERDIÓ'}`);
+        } else if (bet.betType === 'special_combined' && bet.specialBets) {
+            // CORRECCIÓN: Extraer correctamente los tipos de las apuestas especiales
+            const specialTypes = bet.specialBets.map(item => item.type || item.specialType || item);
+            won = checkSpecialBets(specialTypes, goals1, goals2, specialResults);
+            console.log(`   Combinada especial: ${won ? 'GANÓ' : 'PERDIÓ'}`);
         } else {
-            // Fallback para apuestas simples sin tipo específico
+            // Apuesta simple tradicional
             won = bet.prediction === result;
+            console.log(`   Simple ${bet.prediction} vs ${result}: ${won ? 'GANÓ' : 'PERDIÓ'}`);
         }
         
         bet.status = won ? 'won' : 'lost';
@@ -1350,42 +1385,66 @@ function processMatchBets(matchId, result, goals1 = null, goals2 = null, special
             userData[bet.userId].balance += winnings;
             userData[bet.userId].wonBets++;
             userData[bet.userId].totalWinnings += winnings;
+            console.log(`   💰 Usuario ${bet.userId} ganó ${winnings}`);
         } else {
             userData[bet.userId].lostBets++;
+            console.log(`   ❌ Usuario ${bet.userId} perdió ${bet.amount}`);
         }
     }
 }
 
 function checkSpecialBets(specialBets, goals1, goals2, specialResults) {
-    for (const specialBet of specialBets) {
-        const { type } = specialBet;
-        let betWon = false;
-        
-        switch (type) {
-            case 'both_teams_score':
-                betWon = goals1 > 0 && goals2 > 0;
-                break;
-            case 'total_goals_over_2_5':
-                betWon = (goals1 + goals2) > 2.5;
-                break;
-            case 'total_goals_under_2_5':
-                betWon = (goals1 + goals2) < 2.5;
-                break;
-            case 'home_goals_over_1_5':
-                betWon = goals1 > 1.5;
-                break;
-            case 'away_goals_over_1_5':
-                betWon = goals2 > 1.5;
-                break;
-            default:
-                // Para goles especiales, usar specialResults
-                betWon = specialResults[type] === true;
-                break;
+    // Si specialBets es un array (apuestas combinadas)
+    if (Array.isArray(specialBets)) {
+        for (const specialBet of specialBets) {
+            // Obtener el tipo correcto del objeto
+            const specialType = specialBet.type || specialBet.specialType || specialBet;
+            let betWon = false;
+            
+            switch (specialType) {
+                case 'both_teams_score':
+                    betWon = goals1 > 0 && goals2 > 0;
+                    break;
+                case 'total_goals_over_2_5':
+                    betWon = (goals1 + goals2) > 2.5;
+                    break;
+                case 'total_goals_under_2_5':
+                    betWon = (goals1 + goals2) < 2.5;
+                    break;
+                case 'home_goals_over_1_5':
+                    betWon = goals1 > 1.5;
+                    break;
+                case 'away_goals_over_1_5':
+                    betWon = goals2 > 1.5;
+                    break;
+                default:
+                    // Para goles especiales, usar specialResults
+                    betWon = specialResults[specialType] === true;
+                    break;
+            }
+            
+            if (!betWon) return false; // Si falla una, falla toda la apuesta
         }
-        
-        if (!betWon) return false; // Si falla una, falla toda la apuesta
+        return true;
     }
-    return true;
+    
+    // Si specialBets es un string (caso de apuesta individual)
+    const specialType = specialBets;
+    switch (specialType) {
+        case 'both_teams_score':
+            return goals1 > 0 && goals2 > 0;
+        case 'total_goals_over_2_5':
+            return (goals1 + goals2) > 2.5;
+        case 'total_goals_under_2_5':
+            return (goals1 + goals2) < 2.5;
+        case 'home_goals_over_1_5':
+            return goals1 > 1.5;
+        case 'away_goals_over_1_5':
+            return goals2 > 1.5;
+        default:
+            // Para goles especiales, usar specialResults
+            return specialResults[specialType] === true;
+    }
 }
 
 function checkCombinedBets(combinedBets, result, goals1, goals2, specialResults) {
@@ -1841,26 +1900,61 @@ corner, libre, chilena, cabeza, delantero, medio, defensa, arquero
         return;
     }
     
-    const resultMatchId = args[1], manualResult = args[2].toLowerCase(), goals1 = parseInt(args[3]), goals2 = parseInt(args[4]);
+    const resultMatchId = args[1];
+    const manualResult = args[2].toLowerCase();
+    const goals1 = parseInt(args[3]);
+    const goals2 = parseInt(args[4]);
     const specialEvents = args[5] ? args[5].split(',').map(s => s.trim()) : [];
     
-    // Crear objeto de resultados especiales
-    const specialResults = {
-        corner_goal: specialEvents.includes('corner'),
-        free_kick_goal: specialEvents.includes('libre'),
-        bicycle_kick_goal: specialEvents.includes('chilena'),
-        header_goal: specialEvents.includes('cabeza'),
-        striker_goal: specialEvents.includes('delantero'),
-        midfielder_goal: specialEvents.includes('medio'),
-        defender_goal: specialEvents.includes('defensa'),
-        goalkeeper_goal: specialEvents.includes('arquero')
-    };
+    // CORRECCIÓN: Mapeo consistente con las funciones de validación
+    const specialResults = {};
+    specialEvents.forEach(event => {
+        const eventLower = event.toLowerCase();
+        switch(eventLower) {
+            case 'corner':
+                specialResults['corner_goal'] = true;
+                break;
+            case 'libre':
+            case 'tiro-libre':
+                specialResults['free_kick_goal'] = true;
+                break;
+            case 'chilena':
+            case 'bicycle':
+                specialResults['bicycle_kick_goal'] = true;
+                break;
+            case 'cabeza':
+            case 'header':
+                specialResults['header_goal'] = true;
+                break;
+            case 'delantero':
+            case 'striker':
+                specialResults['striker_goal'] = true;
+                break;
+            case 'medio':
+            case 'mediocampista':
+            case 'midfielder':
+                specialResults['midfielder_goal'] = true;
+                break;
+            case 'defensa':
+            case 'defender':
+                specialResults['defender_goal'] = true;
+                break;
+            case 'arquero':
+            case 'portero':
+            case 'goalkeeper':
+                specialResults['goalkeeper_goal'] = true;
+                break;
+            default:
+                console.log(`⚠️ Evento especial no reconocido: ${event}`);
+        }
+    });
     
     const manualResultResponse = setManualResult(resultMatchId, manualResult, goals1, goals2, specialResults);
     
     if (manualResultResponse.success) {
         const match = manualResultResponse.match;
-        let winnerText = manualResultResponse.result === 'team1' ? match.team1.split(' (')[0] : manualResultResponse.result === 'team2' ? match.team2.split(' (')[0] : 'Empate';
+        let winnerText = manualResultResponse.result === 'team1' ? match.team1.split(' (')[0] : 
+                        manualResultResponse.result === 'team2' ? match.team2.split(' (')[0] : 'Empate';
         
         const specialEventsText = specialEvents.length > 0 ? 
             `\n**Eventos especiales:** ${specialEvents.join(', ')}` : '';
