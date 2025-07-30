@@ -1844,85 +1844,9 @@ letter-spacing: 0.3px;
         padding: 0.6rem;
     }
 }
-/* ===== BOTÓN DE RECARGA ===== */
-.refresh-btn {
-    position: fixed;
-    top: 100px;
-    right: 20px;
-    width: 50px;
-    height: 50px;
-    background: linear-gradient(135deg, #ff6600, #ffa600);
-    border: none;
-    border-radius: 50%;
-    cursor: pointer;
-    box-shadow: 0 4px 15px rgba(255, 102, 0, 0.3);
-    z-index: 999;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    backdrop-filter: blur(10px);
-    border: 2px solid rgba(255, 255, 255, 0.2);
-}
-
-.refresh-btn:hover {
-    transform: translateY(-3px) scale(1.1);
-    box-shadow: 0 8px 25px rgba(255, 102, 0, 0.4);
-    background: linear-gradient(135deg, #e55a00, #e59500);
-}
-
-.refresh-btn:active {
-    transform: translateY(-1px) scale(1.05);
-}
-
-.refresh-icon {
-    color: white;
-    font-size: 1.3rem;
-    transition: transform 0.6s ease;
-}
-
-.refresh-btn.spinning .refresh-icon {
-    animation: spin-refresh 0.8s ease-in-out;
-}
-
-@keyframes spin-refresh {
-    0% { 
-        transform: rotate(0deg) scale(1);
-    }
-    50% { 
-        transform: rotate(180deg) scale(1.2);
-    }
-    100% { 
-        transform: rotate(360deg) scale(1);
-    }
-}
-
-/* Responsive para móviles */
-@media (max-width: 768px) {
-    .refresh-btn {
-        top: 80px;
-        right: 15px;
-        width: 45px;
-        height: 45px;
-    }
-    
-    .refresh-icon {
-        font-size: 1.1rem;
-    }
-}
     </style>
 </head>
 <body>
-    <!-- Botón de recarga -->
-<button class="refresh-btn" id="refreshBtn" title="Recargar página">
-    <span class="refresh-icon">
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <polyline points="23 4 23 10 17 10"></polyline>
-        <polyline points="1 20 1 14 7 14"></polyline>
-        <path d="m3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
-    </svg>
-</span>
-</button>
     <header class="header">
         <div class="header-content">
             <a href="https://iosoccer-sa.com/" target="_blank" class="logo-link">
@@ -4036,63 +3960,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }, 30000);
     });
 </script>
-<script>
-// Funcionalidad del botón de recarga
-document.addEventListener('DOMContentLoaded', function() {
-    const refreshBtn = document.getElementById('refreshBtn');
-    
-    if (refreshBtn) {
-        refreshBtn.addEventListener('click', function() {
-            // Agregar clase de animación
-            this.classList.add('spinning');
-            
-            // Mostrar notificación opcional
-            showNotification('Recargando página...', 'info');
-            
-            // Recargar la página después de la animación
-            setTimeout(() => {
-                location.reload();
-            }, 400);
-        });
-        
-        // Remover clase de animación cuando termine
-        refreshBtn.addEventListener('animationend', function() {
-            this.classList.remove('spinning');
-        });
-    }
-});
 
-// Función auxiliar para mostrar notificaciones (si ya tienes una similar, puedes omitir esta)
-function showNotification(message, type = 'info') {
-    // Verificar si ya exists una función de notificaciones
-    if (typeof window.showNotification === 'function') {
-        window.showNotification(message, type);
-        return;
-    }
-    
-    // Crear notificación simple si no existe
-    const notification = document.createElement('div');
-    notification.className = `notification ${type} show`;
-    notification.textContent = message;
-    notification.style.cssText = `
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        background: #333;
-        color: white;
-        padding: 1rem;
-        border-radius: 4px;
-        z-index: 1001;
-        border-left: 4px solid #ff6600;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-    `;
-    
-    document.body.appendChild(notification);
-    
-    setTimeout(() => {
-        notification.remove();
-    }, 2000);
-}
-</script>
 </body>
 </html>
