@@ -1080,30 +1080,17 @@ border-left: 4px solid transparent;
 }
 
         .close {
-    position: absolute;
-    right: 1rem;
-    top: 1rem;
-    font-size: 1.5rem;
-    cursor: pointer;
-    color: #666;
-    /* AGREGAR ESTOS ESTILOS: */
-    z-index: 1001;
-    width: 40px;
-    height: 40px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 50%;
-    background: rgba(255, 255, 255, 0.9);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-    transition: all 0.3s ease;
-}
+            position: absolute;
+            right: 1rem;
+            top: 1rem;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: #666;
+        }
 
-.close:hover {
-    color: #ff6600;
-    background: rgba(255, 102, 0, 0.1);
-    transform: scale(1.1);
-}
+        .close:hover {
+            color: #ff6600;
+        }
 
         .bet-form {
             display: flex;
@@ -1116,22 +1103,7 @@ border-left: 4px solid transparent;
             grid-template-columns: 1fr 1fr 1fr;
             gap: 0.5rem;
         }
-@media (max-width: 768px) {
-    .close {
-        right: 0.5rem;
-        top: 0.5rem;
-        width: 44px;
-        height: 44px;
-        font-size: 1.8rem;
-        background: rgba(255, 255, 255, 0.95);
-        border: 2px solid rgba(255, 102, 0, 0.2);
-    }
-    
-    .close:active {
-        transform: scale(0.95);
-        background: rgba(255, 102, 0, 0.2);
-    }
-}
+
 .prediction-btn {
     padding: 1.2rem 1rem;
     border: 2px solid #d0d7dd;
