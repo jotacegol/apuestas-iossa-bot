@@ -676,7 +676,64 @@ app.get('/api/pending-matches', requireAuth, (req, res) => {
     
     res.json(pendingMatches);
 });
+// API de Top Usuarios (Ranking de Millonarios)
+app.get('/api/top-users', (req, res) => {
+    try {
+        // Obtener todos los usuarios y ordenarlos por balance
+        const topUsers = Object.entries(userData)
+            .map(([userId, user]) => ({
+                id: userId,
+                username: user.username || 'Usuario',
+                discriminator: user.discriminator || '0000',
+                avatar: user.avatar,
+                balance: user.balance || 1000,
+                totalBets: user.totalBets || 0,
+                wonBets: user.wonBets || 0,
+                lostBets: user.lostBets || 0,
+                totalWinnings: user.totalWinnings || 0,
+                winRate: user.totalBets > 0 ? (user.wonBets / user.totalBets * 100).toFixed(1) : 0
+            }))
+            .sort((a, b) => b.balance - a.balance) // Ordenar por balance descendente
+            .slice(0, 10); // Solo los top 10
 
+        console.log(`📊 Enviando ranking de ${topUsers.length} usuarios`);
+        res.json(topUsers);
+    } catch (error) {
+        console.error('❌ Error obteniendo top usuarios:', error);
+        res.status(500).json({ error: 'Error interno del servidor' });
+    }
+});
+
+// También agregar un endpoint para estadísticas generales mejoradas
+app.get('/api/stats/general', (req, res) => {
+    try {
+        const totalUsers = Object.keys(userData).length;
+        const totalMatches = Object.values(matches).filter(m => m.status === 'upcoming').length;
+        const totalFinishedMatches = Object.values(matches).filter(m => m.status === 'finished').length;
+        const totalBets = Object.keys(bets).length;
+        const totalVolume = Object.values(bets).reduce((sum, bet) => sum + bet.amount, 0);
+        const activeBets = Object.values(bets).filter(bet => bet.status === 'pending').length;
+        
+        // Calcular usuario con más balance
+        const richestUser = Object.values(userData).reduce((richest, user) => {
+            return (user.balance || 1000) > (richest.balance || 1000) ? user : richest;
+        }, { balance: 0 });
+
+        res.json({
+            totalUsers,
+            totalMatches,
+            totalFinishedMatches,
+            totalBets,
+            totalVolume,
+            activeBets,
+            richestUserBalance: richestUser.balance || 1000,
+            averageUserBalance: totalUsers > 0 ? Math.round(Object.values(userData).reduce((sum, user) => sum + (user.balance || 1000), 0) / totalUsers) : 1000
+        });
+    } catch (error) {
+        console.error('❌ Error obteniendo estadísticas generales:', error);
+        res.status(500).json({ error: 'Error interno del servidor' });
+    }
+});
 // Bot Discord
 const client = new Discord.Client({ intents: [Discord.GatewayIntentBits.Guilds, Discord.GatewayIntentBits.GuildMessages, Discord.GatewayIntentBits.MessageContent] });
 
