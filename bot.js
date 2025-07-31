@@ -816,7 +816,8 @@ const client = new Discord.Client({ intents: [Discord.GatewayIntentBits.Guilds, 
 
 let userData = {}, teams = {}, matches = {}, bets = {}, matchResults = {};
 
-function calculateOdds(team1, team2) {
+// Función principal mejorada para calcular cuotas que considera el contexto del torneo
+function calculateOdds(team1, team2, tournament = null) {
     const t1 = teams[team1], t2 = teams[team2];
     if (!t1 || !t2) return { team1: 2.0, draw: 3.0, team2: 2.0 };
     
@@ -824,16 +825,20 @@ function calculateOdds(team1, team2) {
     const t2League = t2.league || (team2.includes('(D2)') ? 'D2' : 'D1');
     const t1Position = t1.position || 10, t2Position = t2.position || 10;
     
+    // Si es un torneo de copa, usar cálculo especializado
+    if (tournament && KNOCKOUT_TOURNAMENTS.includes(tournament)) {
+        return calculateCupOdds(t1, t2, t1League, t2League, t1Position, t2Position, tournament);
+    }
+    
+    // Mantener la lógica original para partidos de liga
     let t1Strength = calculateTeamStrength(t1, t1League);
     let t2Strength = calculateTeamStrength(t2, t2League);
     
-    // NUEVO: Penalizar fuertemente a los primeros puestos contra equipos de su liga
+    // Penalizar fuertemente a los primeros puestos contra equipos de su liga
     if (t1League === t2League) {
-        // Si es el primer puesto, paga muy poco contra cualquiera de su liga
         if (t1Position === 1) t1Strength *= 2.5;
         if (t2Position === 1) t2Strength *= 2.5;
         
-        // Top 3 también recibe bonus considerable
         if (t1Position <= 3 && t1Position !== 1) t1Strength *= 1.8;
         if (t2Position <= 3 && t2Position !== 1) t2Strength *= 1.8;
     }
@@ -867,6 +872,198 @@ function calculateOdds(team1, team2) {
     }
     
     return { team1: Math.round(team1Odds * 100) / 100, draw: Math.round(drawOdds * 100) / 100, team2: Math.round(team2Odds * 100) / 100 };
+}
+
+// Nueva función para calcular cuotas específicas de torneos de copa
+function calculateCupOdds(t1, t2, t1League, t2League, t1Position, t2Position, tournament) {
+    // Factores base según la liga de origen
+    let t1BaseStrength = 100;
+    let t2BaseStrength = 100;
+    
+    // Bonificación por liga (más agresiva para copas)
+    if (t1League === 'D1') t1BaseStrength += 60;
+    else if (t1League === 'D2') t1BaseStrength += 20;
+    else if (t1League === 'D3') t1BaseStrength -= 30;
+    
+    if (t2League === 'D1') t2BaseStrength += 60;
+    else if (t2League === 'D2') t2BaseStrength += 20;
+    else if (t2League === 'D3') t2BaseStrength -= 30;
+    
+    // Bonificación/penalización por posición en liga (más agresiva para copas)
+    const t1PositionModifier = calculateCupPositionModifier(t1Position, t1League);
+    const t2PositionModifier = calculateCupPositionModifier(t2Position, t2League);
+    
+    t1BaseStrength *= t1PositionModifier;
+    t2BaseStrength *= t2PositionModifier;
+    
+    // Bonificación por forma reciente (más importante en copas)
+    const t1FormBonus = calculateFormBonus(t1.lastFiveMatches || 'DDDDD');
+    const t2FormBonus = calculateFormBonus(t2.lastFiveMatches || 'DDDDD');
+    
+    t1BaseStrength *= t1FormBonus;
+    t2BaseStrength *= t2FormBonus;
+    
+    // Aplicar factores específicos del torneo
+    const tournamentFactor = getCupTournamentFactor(tournament, t1League, t2League);
+    t1BaseStrength *= tournamentFactor.team1Multiplier;
+    t2BaseStrength *= tournamentFactor.team2Multiplier;
+    
+    // Casos extremos: 1ro D1 vs equipos muy inferiores
+    if (t1League === 'D1' && t1Position === 1) {
+        if (t2League === 'D2' && t2Position >= 7) {
+            t1BaseStrength *= 4.0; // Súper favorito
+        } else if (t2League === 'D3' || (t2League === 'D2' && t2Position >= 15)) {
+            t1BaseStrength *= 6.0; // Extremadamente favorito
+        } else if (t2League === 'D2' && t2Position >= 4) {
+            t1BaseStrength *= 2.5; // Muy favorito
+        }
+    }
+    
+    if (t2League === 'D1' && t2Position === 1) {
+        if (t1League === 'D2' && t1Position >= 7) {
+            t2BaseStrength *= 4.0;
+        } else if (t1League === 'D3' || (t1League === 'D2' && t1Position >= 15)) {
+            t2BaseStrength *= 6.0;
+        } else if (t1League === 'D2' && t1Position >= 4) {
+            t2BaseStrength *= 2.5;
+        }
+    }
+    
+    // Casos adicionales: Primeros 3 de D1 vs equipos medios/bajos de D2
+    if (t1League === 'D1' && t1Position <= 3 && t2League === 'D2' && t2Position >= 8) {
+        t1BaseStrength *= 2.8;
+    }
+    if (t2League === 'D1' && t2Position <= 3 && t1League === 'D2' && t1Position >= 8) {
+        t2BaseStrength *= 2.8;
+    }
+    
+    // Calcular probabilidades
+    const total = t1BaseStrength + t2BaseStrength;
+    const t1Prob = t1BaseStrength / total;
+    const t2Prob = t2BaseStrength / total;
+    
+    // Probabilidad de empate más baja en copas eliminatorias
+    let drawProb = 0.16;
+    
+    // Ajustar probabilidad de empate según la diferencia de nivel
+    const strengthRatio = Math.max(t1BaseStrength, t2BaseStrength) / Math.min(t1BaseStrength, t2BaseStrength);
+    if (strengthRatio > 5) drawProb = 0.10; // Muy pocos empates cuando hay gran diferencia
+    else if (strengthRatio > 3) drawProb = 0.12;
+    else if (strengthRatio > 2) drawProb = 0.14;
+    
+    const adjustedT1Prob = t1Prob * (1 - drawProb);
+    const adjustedT2Prob = t2Prob * (1 - drawProb);
+    
+    // Calcular cuotas con margen más bajo para copas
+    const margin = 0.03;
+    
+    let team1Odds = Math.max(1.05, Math.min(30.0, (1 / adjustedT1Prob) * (1 - margin)));
+    let team2Odds = Math.max(1.05, Math.min(30.0, (1 / adjustedT2Prob) * (1 - margin)));
+    let drawOdds = Math.max(3.2, Math.min(10.0, (1 / drawProb) * (1 - margin)));
+    
+    return {
+        team1: Math.round(team1Odds * 100) / 100,
+        draw: Math.round(drawOdds * 100) / 100,
+        team2: Math.round(team2Odds * 100) / 100
+    };
+}
+
+// Función para calcular modificador de posición específico para copas
+function calculateCupPositionModifier(position, league) {
+    let baseModifier = 1.0;
+    
+    if (league === 'D1') {
+        if (position === 1) baseModifier = 3.2;      // Líder D1: súper favorito
+        else if (position === 2) baseModifier = 2.6;  // 2do D1: muy favorito
+        else if (position === 3) baseModifier = 2.2;  // 3ro D1: favorito
+        else if (position <= 5) baseModifier = 1.8;   // Top 5 D1
+        else if (position <= 8) baseModifier = 1.5;   // Top 8 D1
+        else if (position <= 12) baseModifier = 1.2;  // Media tabla D1
+        else if (position <= 16) baseModifier = 1.0;  // Baja tabla D1
+        else baseModifier = 0.8;                      // Últimos D1
+    } else if (league === 'D2') {
+        if (position === 1) baseModifier = 2.0;       // Líder D2: favorito moderado
+        else if (position === 2) baseModifier = 1.7;  // 2do D2
+        else if (position === 3) baseModifier = 1.5;  // 3ro D2
+        else if (position <= 5) baseModifier = 1.3;   // Top 5 D2
+        else if (position <= 8) baseModifier = 1.0;   // Top 8 D2
+        else if (position <= 12) baseModifier = 0.8;  // Media tabla D2
+        else if (position <= 16) baseModifier = 0.6;  // Baja tabla D2
+        else baseModifier = 0.4;                      // Últimos D2
+    } else if (league === 'D3') {
+        if (position === 1) baseModifier = 1.3;       // Líder D3
+        else if (position <= 3) baseModifier = 1.0;   // Top 3 D3
+        else if (position <= 8) baseModifier = 0.8;   // Media tabla D3
+        else baseModifier = 0.6;                      // Resto D3
+    }
+    
+    return baseModifier;
+}
+
+// Función para calcular bonificación por forma reciente
+function calculateFormBonus(formString) {
+    const wins = (formString.match(/W/g) || []).length;
+    const losses = (formString.match(/L/g) || []).length;
+    const draws = (formString.match(/D/g) || []).length;
+    
+    let bonus = 1.0;
+    
+    // Bonificación por victorias
+    if (wins >= 4) bonus = 1.35;      // Racha excelente
+    else if (wins >= 3) bonus = 1.25; // Buena racha
+    else if (wins >= 2) bonus = 1.15; // Forma decente
+    else if (wins === 1) bonus = 1.05; // Forma regular
+    else bonus = 0.85; // Sin victorias recientes
+    
+    // Penalización por derrotas
+    if (losses >= 4) bonus *= 0.65;   // Muy mala racha
+    else if (losses >= 3) bonus *= 0.75; // Mala racha
+    else if (losses >= 2) bonus *= 0.85; // Forma irregular
+    
+    // Bonificación pequeña por invicto
+    if (losses === 0 && wins >= 2) bonus *= 1.1;
+    
+    return Math.max(0.5, Math.min(1.8, bonus)); // Limitar entre 0.5 y 1.8
+}
+
+// Función para obtener factor específico del torneo
+function getCupTournamentFactor(tournament, t1League, t2League) {
+    let team1Multiplier = 1.0;
+    let team2Multiplier = 1.0;
+    
+    // Factores específicos por torneo
+    switch (tournament) {
+        case 'maradei': // Copa Maradei - torneo prestigioso, favorece a D1
+            if (t1League === 'D1') team1Multiplier *= 1.25;
+            if (t2League === 'D1') team2Multiplier *= 1.25;
+            if (t1League === 'D2') team1Multiplier *= 0.9; // Ligera desventaja D2
+            if (t2League === 'D2') team2Multiplier *= 0.9;
+            break;
+            
+        case 'cv': // Copa ValencARc - torneo eliminatorio puro
+            // Factor neutro, la forma y posición son más importantes
+            break;
+            
+        case 'cd2': // Copa D2 - solo equipos D2
+            // Equipos están en igualdad de condiciones por liga
+            break;
+            
+        case 'cd3': // Copa D3 - solo equipos D3
+            // Equipos están en igualdad de condiciones por liga
+            break;
+            
+        case 'izoro': // Copa Intrazonal de Oro - favorece equipos top
+            if (t1League === 'D1') team1Multiplier *= 1.15;
+            if (t2League === 'D1') team2Multiplier *= 1.15;
+            break;
+            
+        case 'izplata': // Copa Intrazonal de Plata - favorece D2
+            if (t1League === 'D2') team1Multiplier *= 1.12;
+            if (t2League === 'D2') team2Multiplier *= 1.12;
+            break;
+    }
+    
+    return { team1Multiplier, team2Multiplier };
 }
 // Función para calcular cuotas de resultado exacto
 function calculateExactScoreOdds(match, exactScore) {
@@ -1390,6 +1587,7 @@ async function scrapeAllLeagues() {
     }
 }
 
+// Actualizar la función createCustomMatch para pasar el torneo
 function createCustomMatch(team1Name, team2Name, tournament = null) {
     const team1 = findTeamByName(team1Name, tournament);
     const team2 = findTeamByName(team2Name, tournament);
@@ -1417,7 +1615,10 @@ function createCustomMatch(team1Name, team2Name, tournament = null) {
     }
     
     const matchId = Date.now().toString();
-    const odds = calculateOdds(team1.fullName, team2.fullName);
+    
+    // CAMBIO IMPORTANTE: Pasar el torneo al cálculo de cuotas
+    const odds = calculateOdds(team1.fullName, team2.fullName, tournament);
+    
     const matchTime = new Date(Date.now() + Math.random() * 24 * 60 * 60 * 1000);
     
     matches[matchId] = { 
@@ -1844,10 +2045,12 @@ case '!match':
         message.reply(`❌ Uso: \`!crearmatch <equipo1> vs <equipo2> [torneo]\`
 **Ejemplos:**
 \`!crearmatch "Boca" vs "River"\` (busca en todos los torneos)
-\`!crearmatch "Boca" vs "River" d1\` (solo en Liga D1)
+\`!crearmatch "Aimstar" vs "Deportivo Tarrito" maradei\` (Copa Maradei - cuotas ajustadas)
 
 **Torneos disponibles:**
-${tournamentsText}`);
+${tournamentsText}
+
+**💡 Nota:** Los torneos de copa (maradei, cv, etc.) tienen cuotas especialmente ajustadas que consideran el contexto eliminatorio.`);
         return;
     }
     
