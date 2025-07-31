@@ -823,55 +823,243 @@ function calculateOdds(team1, team2, tournament = null) {
     
     const t1League = t1.league || (team1.includes('(D1)') ? 'D1' : 'D2');
     const t2League = t2.league || (team2.includes('(D2)') ? 'D2' : 'D1');
-    const t1Position = t1.position || 10, t2Position = t2.position || 10;
+    const t1Position = t1.position || 10;
+    const t2Position = t2.position || 10;
+    
+    console.log(`🔍 Calculando cuotas: ${team1} (${t1League} pos.${t1Position}) vs ${team2} (${t2League} pos.${t2Position})`);
     
     // Si es un torneo de copa, usar cálculo especializado
     if (tournament && KNOCKOUT_TOURNAMENTS.includes(tournament)) {
         return calculateCupOdds(t1, t2, t1League, t2League, t1Position, t2Position, tournament);
     }
     
-    // Mantener la lógica original para partidos de liga
-    let t1Strength = calculateTeamStrength(t1, t1League);
-    let t2Strength = calculateTeamStrength(t2, t2League);
+    // NUEVO SISTEMA: Cálculo de fuerza base más agresivo
+    let t1BaseStrength = calculateNewTeamStrength(t1, t1League, t1Position);
+    let t2BaseStrength = calculateNewTeamStrength(t2, t2League, t2Position);
     
-    // Penalizar fuertemente a los primeros puestos contra equipos de su liga
-    if (t1League === t2League) {
-        if (t1Position === 1) t1Strength *= 2.5;
-        if (t2Position === 1) t2Strength *= 2.5;
+    console.log(`💪 Fuerza base: ${team1}=${t1BaseStrength}, ${team2}=${t2BaseStrength}`);
+    
+    // CASOS EXTREMOS: Diferencias inter-liga con posiciones extremas
+    if (t1League !== t2League) {
+        const { t1Multiplier, t2Multiplier } = calculateExtremeInterLeagueMultipliers(
+            t1League, t1Position, t2League, t2Position
+        );
         
-        if (t1Position <= 3 && t1Position !== 1) t1Strength *= 1.8;
-        if (t2Position <= 3 && t2Position !== 1) t2Strength *= 1.8;
+        t1BaseStrength *= t1Multiplier;
+        t2BaseStrength *= t2Multiplier;
+        
+        console.log(`🚀 Multiplicadores inter-liga aplicados: t1=${t1Multiplier}, t2=${t2Multiplier}`);
+        console.log(`💪 Fuerza final: ${team1}=${t1BaseStrength}, ${team2}=${t2BaseStrength}`);
     }
+    
+    // Aplicar bonificación por forma reciente (más conservadora)
+    const t1FormBonus = calculateRealisticFormBonus(t1.lastFiveMatches || 'DDDDD');
+    const t2FormBonus = calculateRealisticFormBonus(t2.lastFiveMatches || 'DDDDD');
+    
+    t1BaseStrength *= t1FormBonus;
+    t2BaseStrength *= t2FormBonus;
+    
+    // Calcular probabilidades
+    const total = t1BaseStrength + t2BaseStrength;
+    const t1Prob = t1BaseStrength / total;
+    const t2Prob = t2BaseStrength / total;
+    
+    // Probabilidad de empate ajustada según diferencia de nivel
+    let drawProb = calculateRealisticDrawProbability(t1League, t2League, t1Position, t2Position, t1BaseStrength, t2BaseStrength);
+    
+    const adjustedT1Prob = t1Prob * (1 - drawProb);
+    const adjustedT2Prob = t2Prob * (1 - drawProb);
+    
+    // Calcular cuotas con margen
+    const margin = 0.08; // Margen de la casa más realista
+    
+    let team1Odds = Math.max(1.01, Math.min(50.0, (1 / adjustedT1Prob) * (1 - margin)));
+    let team2Odds = Math.max(1.01, Math.min(50.0, (1 / adjustedT2Prob) * (1 - margin)));
+    let drawOdds = Math.max(2.5, Math.min(20.0, (1 / drawProb) * (1 - margin)));
+    
+    // Aplicar límites finales para casos extremos
+    const finalOdds = applyFinalOddsLimits(team1Odds, team2Odds, drawOdds, t1League, t1Position, t2League, t2Position);
+    
+    console.log(`🎯 Cuotas finales: ${team1}=${finalOdds.team1}, Empate=${finalOdds.draw}, ${team2}=${finalOdds.team2}`);
+    
+    return finalOdds;
+}
+function calculateNewTeamStrength(team, league, position) {
+    let baseStrength = 100;
+    
+    // Bonificación/penalización por liga (más agresiva)
+    if (league === 'D1') {
+        baseStrength += 150; // D1 es MUY superior
+    } else if (league === 'D2') {
+        baseStrength += 50;  // D2 es mediocre
+    } else if (league === 'D3') {
+        baseStrength -= 50;  // D3 es inferior
+    }
+    
+    // Bonificación/penalización por posición (más extrema)
+    if (position === 1) {
+        baseStrength *= (league === 'D1' ? 2.8 : league === 'D2' ? 2.2 : 1.8); // Líderes son MUY fuertes
+    } else if (position === 2) {
+        baseStrength *= (league === 'D1' ? 2.4 : league === 'D2' ? 1.9 : 1.6);
+    } else if (position === 3) {
+        baseStrength *= (league === 'D1' ? 2.1 : league === 'D2' ? 1.7 : 1.4);
+    } else if (position <= 5) {
+        baseStrength *= (league === 'D1' ? 1.8 : league === 'D2' ? 1.4 : 1.2); // Top 5
+    } else if (position <= 8) {
+        baseStrength *= (league === 'D1' ? 1.5 : league === 'D2' ? 1.1 : 1.0); // Top 8
+    } else if (position <= 12) {
+        baseStrength *= (league === 'D1' ? 1.2 : league === 'D2' ? 0.9 : 0.8); // Media tabla
+    } else if (position <= 16) {
+        baseStrength *= (league === 'D1' ? 1.0 : league === 'D2' ? 0.7 : 0.6); // Baja tabla
+    } else {
+        baseStrength *= (league === 'D1' ? 0.8 : league === 'D2' ? 0.5 : 0.4); // Últimos puestos son TERRIBLES
+    }
+    
+    return Math.max(10, baseStrength); // Mínimo 10 para evitar divisiones por 0
+}
+
+function calculateExtremeInterLeagueMultipliers(t1League, t1Position, t2League, t2Position) {
+    let t1Multiplier = 1.0;
+    let t2Multiplier = 1.0;
     
     if (t1League === 'D1' && t2League === 'D2') {
-        const factor = calculateInterLeagueFactor(t1Position, t2Position, 'D1_vs_D2');
-        t1Strength *= factor.team1Multiplier;
-        t2Strength *= factor.team2Multiplier;
+        if (t1Position === 1) { // 1° D1
+            if (t2Position >= 18) {
+                t1Multiplier = 8.0;  // 1° D1 vs últimos D2 = súper favorito
+                t2Multiplier = 0.15;
+            } else if (t2Position >= 15) {
+                t1Multiplier = 6.0;  // 1° D1 vs baja tabla D2
+                t2Multiplier = 0.2;
+            } else if (t2Position >= 10) {
+                t1Multiplier = 4.5;  // 1° D1 vs media tabla D2
+                t2Multiplier = 0.25;
+            } else if (t2Position >= 5) {
+                t1Multiplier = 3.5;  // 1° D1 vs top D2
+                t2Multiplier = 0.35;
+            } else {
+                t1Multiplier = 2.8;  // 1° D1 vs top 5 D2
+                t2Multiplier = 0.45;
+            }
+        } else if (t1Position <= 3) { // Top 3 D1
+            if (t2Position >= 15) {
+                t1Multiplier = 4.5;
+                t2Multiplier = 0.25;
+            } else if (t2Position >= 8) {
+                t1Multiplier = 3.2;
+                t2Multiplier = 0.35;
+            } else {
+                t1Multiplier = 2.5;
+                t2Multiplier = 0.5;
+            }
+        } else if (t1Position <= 8) { // Top 8 D1
+            if (t2Position >= 15) {
+                t1Multiplier = 3.0;
+                t2Multiplier = 0.4;
+            } else if (t2Position >= 8) {
+                t1Multiplier = 2.2;
+                t2Multiplier = 0.55;
+            } else {
+                t1Multiplier = 1.8;
+                t2Multiplier = 0.65;
+            }
+        } else { // Resto D1
+            if (t2Position >= 15) {
+                t1Multiplier = 2.0;
+                t2Multiplier = 0.6;
+            } else {
+                t1Multiplier = 1.5;
+                t2Multiplier = 0.75;
+            }
+        }
     } else if (t1League === 'D2' && t2League === 'D1') {
-        const factor = calculateInterLeagueFactor(t2Position, t1Position, 'D2_vs_D1');
-        t1Strength *= factor.team2Multiplier;
-        t2Strength *= factor.team1Multiplier;
+        // D2 vs D1: Invertir los multiplicadores
+        const { t1Multiplier: temp1, t2Multiplier: temp2 } = calculateExtremeInterLeagueMultipliers(
+            t2League, t2Position, t1League, t1Position
+        );
+        t1Multiplier = temp2;
+        t2Multiplier = temp1;
     }
     
-    const total = t1Strength + t2Strength;
-    let t1Prob = t1Strength / total, t2Prob = t2Strength / total;
-    let drawProb = t1League !== t2League ? (((t1Position + t2Position) / 2) <= 5 ? 0.15 : ((t1Position + t2Position) / 2) <= 15 ? 0.12 : 0.08) : 0.22;
+    return { t1Multiplier, t2Multiplier };
+}
+
+function calculateRealisticFormBonus(formString) {
+    const wins = (formString.match(/W/g) || []).length;
+    const losses = (formString.match(/L/g) || []).length;
     
-    const adjustedT1Prob = t1Prob * (1 - drawProb), adjustedT2Prob = t2Prob * (1 - drawProb);
-    const margin = 0.05;
+    let bonus = 1.0;
     
-    let team1Odds = Math.max(1.02, Math.min(50.0, (1 / adjustedT1Prob) * (1 - margin)));
-    let team2Odds = Math.max(1.02, Math.min(50.0, (1 / adjustedT2Prob) * (1 - margin)));
-    let drawOdds = Math.max(2.8, Math.min(15.0, (1 / drawProb) * (1 - margin)));
+    if (wins >= 4) bonus = 1.25;      // Muy buena racha
+    else if (wins >= 3) bonus = 1.15; // Buena racha
+    else if (wins >= 2) bonus = 1.08; // Forma decente
+    else if (wins === 1) bonus = 1.02; // Forma regular
+    
+    if (losses >= 4) bonus *= 0.75;   // Muy mala racha
+    else if (losses >= 3) bonus *= 0.85; // Mala racha
+    else if (losses >= 2) bonus *= 0.92; // Forma irregular
+    
+    return Math.max(0.7, Math.min(1.3, bonus));
+}
+
+function calculateRealisticDrawProbability(t1League, t2League, t1Position, t2Position, t1Strength, t2Strength) {
+    let baseDrawProb = 0.20;
     
     if (t1League !== t2League) {
-        const oddsAdj = calculateSpecificOddsAdjustment(t1Position, t2Position, t1League, t2League);
-        team1Odds = oddsAdj.team1Odds;
-        team2Odds = oddsAdj.team2Odds;
-        drawOdds = Math.max(4.0, Math.min(12.0, drawOdds));
+        baseDrawProb = 0.12;
+        
+        const strengthRatio = Math.max(t1Strength, t2Strength) / Math.min(t1Strength, t2Strength);
+        if (strengthRatio > 8) baseDrawProb = 0.08;
+        else if (strengthRatio > 5) baseDrawProb = 0.10;
+        else if (strengthRatio > 3) baseDrawProb = 0.12;
+    } else {
+        const avgPosition = (t1Position + t2Position) / 2;
+        if (avgPosition <= 5) baseDrawProb = 0.18;
+        else if (avgPosition <= 10) baseDrawProb = 0.22;
+        else baseDrawProb = 0.25;
     }
     
-    return { team1: Math.round(team1Odds * 100) / 100, draw: Math.round(drawOdds * 100) / 100, team2: Math.round(team2Odds * 100) / 100 };
+    return Math.max(0.08, Math.min(0.25, baseDrawProb));
+}
+
+function applyFinalOddsLimits(team1Odds, team2Odds, drawOdds, t1League, t1Position, t2League, t2Position) {
+    // Casos extremos: 1° D1 vs últimos D2
+    if (t1League === 'D1' && t1Position === 1 && t2League === 'D2' && t2Position >= 18) {
+        team1Odds = Math.min(team1Odds, 1.05);
+        team2Odds = Math.max(team2Odds, 25.0);
+        drawOdds = Math.max(drawOdds, 15.0);
+    }
+    else if (t1League === 'D1' && t1Position === 1 && t2League === 'D2' && t2Position >= 10) {
+        team1Odds = Math.min(team1Odds, 1.10);
+        team2Odds = Math.max(team2Odds, 15.0);
+        drawOdds = Math.max(drawOdds, 12.0);
+    }
+    else if (t1League === 'D1' && t1Position <= 3 && t2League === 'D2' && t2Position >= 15) {
+        team1Odds = Math.min(team1Odds, 1.20);
+        team2Odds = Math.max(team2Odds, 12.0);
+        drawOdds = Math.max(drawOdds, 10.0);
+    }
+    // Casos inversos (D2 vs D1)
+    else if (t2League === 'D1' && t2Position === 1 && t1League === 'D2' && t1Position >= 18) {
+        team2Odds = Math.min(team2Odds, 1.05);
+        team1Odds = Math.max(team1Odds, 25.0);
+        drawOdds = Math.max(drawOdds, 15.0);
+    }
+    else if (t2League === 'D1' && t2Position === 1 && t1League === 'D2' && t1Position >= 10) {
+        team2Odds = Math.min(team2Odds, 1.10);
+        team1Odds = Math.max(team1Odds, 15.0);
+        drawOdds = Math.max(drawOdds, 12.0);
+    }
+    else if (t2League === 'D1' && t2Position <= 3 && t1League === 'D2' && t1Position >= 15) {
+        team2Odds = Math.min(team2Odds, 1.20);
+        team1Odds = Math.max(team1Odds, 12.0);
+        drawOdds = Math.max(drawOdds, 10.0);
+    }
+    
+    return {
+        team1: Math.round(team1Odds * 100) / 100,
+        draw: Math.round(drawOdds * 100) / 100,
+        team2: Math.round(team2Odds * 100) / 100
+    };
 }
 
 // Nueva función para calcular cuotas específicas de torneos de copa
@@ -1588,6 +1776,10 @@ async function scrapeAllLeagues() {
 }
 
 // Actualizar la función createCustomMatch para pasar el torneo
+// PASO 3: REEMPLAZAR createCustomMatch() por createCustomMatchImproved()
+// ================================================================================
+// BUSCAR la función createCustomMatch() y REEMPLAZAR por:
+
 function createCustomMatch(team1Name, team2Name, tournament = null) {
     const team1 = findTeamByName(team1Name, tournament);
     const team2 = findTeamByName(team2Name, tournament);
@@ -1597,7 +1789,15 @@ function createCustomMatch(team1Name, team2Name, tournament = null) {
         if (tournament) {
             message += ` en ${TOURNAMENT_NAMES[tournament] || tournament}.`;
         }
-        message += ` Usa \`!equipos\` para ver la lista completa.`;
+        
+        // Sugerir equipos similares
+        const suggestions = getTeamSuggestions(team1Name, 3, tournament);
+        if (suggestions.length > 0) {
+            message += '\n\n**¿Quisiste decir?**\n' + 
+                suggestions.map(s => `• **${s.name}** (${s.tournament} - Pos. ${s.position})`).join('\n');
+        }
+        
+        message += `\n\nUsa \`!equipos\` para ver la lista completa.`;
         return { success: false, message };
     }
     
@@ -1606,7 +1806,14 @@ function createCustomMatch(team1Name, team2Name, tournament = null) {
         if (tournament) {
             message += ` en ${TOURNAMENT_NAMES[tournament] || tournament}.`;
         }
-        message += ` Usa \`!equipos\` para ver la lista completa.`;
+        
+        const suggestions = getTeamSuggestions(team2Name, 3, tournament);
+        if (suggestions.length > 0) {
+            message += '\n\n**¿Quisiste decir?**\n' + 
+                suggestions.map(s => `• **${s.name}** (${s.tournament} - Pos. ${s.position})`).join('\n');
+        }
+        
+        message += `\n\nUsa \`!equipos\` para ver la lista completa.`;
         return { success: false, message };
     }
     
@@ -1616,7 +1823,7 @@ function createCustomMatch(team1Name, team2Name, tournament = null) {
     
     const matchId = Date.now().toString();
     
-    // CAMBIO IMPORTANTE: Pasar el torneo al cálculo de cuotas
+    // Calcular cuotas con el NUEVO sistema
     const odds = calculateOdds(team1.fullName, team2.fullName, tournament);
     
     const matchTime = new Date(Date.now() + Math.random() * 24 * 60 * 60 * 1000);
@@ -1632,6 +1839,7 @@ function createCustomMatch(team1Name, team2Name, tournament = null) {
         isCustom: true,
         tournament: tournament || 'custom'
     };
+    
     saveData();
     
     return { 
@@ -1640,7 +1848,7 @@ function createCustomMatch(team1Name, team2Name, tournament = null) {
         match: matches[matchId], 
         team1Data: team1, 
         team2Data: team2,
-        tournament: tournament 
+        tournament: tournament
     };
 }
 
@@ -2024,7 +2232,320 @@ function deleteFinishedMatches() {
     saveData();
     return { success: true, message: `Se eliminaron ${finishedMatches.length} partidos terminados del historial.`, deletedCount: finishedMatches.length };
 }
+function levenshteinDistance(str1, str2) {
+    const matrix = [];
+    
+    for (let i = 0; i <= str2.length; i++) {
+        matrix[i] = [i];
+    }
+    
+    for (let j = 0; j <= str1.length; j++) {
+        matrix[0][j] = j;
+    }
+    
+    for (let i = 1; i <= str2.length; i++) {
+        for (let j = 1; j <= str1.length; j++) {
+            if (str2.charAt(i - 1) === str1.charAt(j - 1)) {
+                matrix[i][j] = matrix[i - 1][j - 1];
+            } else {
+                matrix[i][j] = Math.min(
+                    matrix[i - 1][j - 1] + 1,
+                    matrix[i][j - 1] + 1,
+                    matrix[i - 1][j] + 1
+                );
+            }
+        }
+    }
+    
+    return matrix[str2.length][str1.length];
+}
 
+function getTeamDetailedStats(teamName) {
+    const team = findTeamByName(teamName);
+    if (!team) return null;
+    
+    const teamData = team.data;
+    const stats = {
+        name: team.fullName.replace(/ \([^)]+\)/, ''),
+        league: teamData.league || 'CUSTOM',
+        tournament: teamData.tournament || 'Custom',
+        position: teamData.position || '?',
+        form: teamData.lastFiveMatches || 'DDDDD',
+        realStats: teamData.realStats || null
+    };
+    
+    // Calcular estadísticas de forma
+    const formResults = stats.form.split('');
+    const wins = formResults.filter(r => r === 'W').length;
+    const draws = formResults.filter(r => r === 'D').length;
+    const losses = formResults.filter(r => r === 'L').length;
+    
+    stats.formAnalysis = {
+        wins, draws, losses,
+        points: wins * 3 + draws,
+        percentage: ((wins * 3 + draws) / 15 * 100).toFixed(1)
+    };
+    
+    return stats;
+}
+
+// Función para scrappear resultados de IOSoccer
+async function scrapeIOSoccerResults(maxPages = 8) {
+    const results = [];
+    const baseUrl = 'https://iosoccer-sa.com/resultados/t15';
+    
+    try {
+        console.log('🔍 Iniciando scraping de resultados...');
+        
+        for (let page = 1; page <= maxPages; page++) {
+            console.log(`📄 Procesando página ${page}/${maxPages}...`);
+            
+            try {
+                const url = `${baseUrl}?page=${page}`;
+                const response = await axios.get(url, {
+                    headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+                    timeout: 15000
+                });
+                
+                const $ = cheerio.load(response.data);
+                let pageResults = 0;
+                
+                // Buscar elementos de resultados - MÚLTIPLES SELECTORES
+                $('tr, .match-row, .result-row').each((index, element) => {
+                    try {
+                        const $row = $(element);
+                        
+                        let team1 = '', team2 = '', score = '', date = '';
+                        
+                        // Método 1: Buscar por celdas de tabla
+                        const cells = $row.find('td');
+                        if (cells.length >= 3) {
+                            // Buscar equipos en las primeras celdas
+                            cells.each((i, cell) => {
+                                const cellText = $(cell).text().trim();
+                                
+                                // Si contiene "vs" o "-", es probable que sean equipos
+                                if (cellText.includes(' vs ') || cellText.includes(' - ')) {
+                                    const parts = cellText.split(/ vs | - /);
+                                    if (parts.length === 2) {
+                                        team1 = parts[0].trim();
+                                        team2 = parts[1].trim();
+                                    }
+                                }
+                                
+                                // Buscar marcador
+                                const scoreMatch = cellText.match(/(\d+)\s*[-:]\s*(\d+)/);
+                                if (scoreMatch && !score) {
+                                    score = `${scoreMatch[1]}-${scoreMatch[2]}`;
+                                }
+                            });
+                        }
+                        
+                        // Método 2: Buscar en todo el texto de la fila
+                        if (!team1 || !team2 || !score) {
+                            const rowText = $row.text();
+                            
+                            // Buscar marcador en formato X-Y
+                            const scoreMatch = rowText.match(/(\d+)\s*[-:]\s*(\d+)/);
+                            if (scoreMatch) {
+                                score = `${scoreMatch[1]}-${scoreMatch[2]}`;
+                                
+                                // Intentar extraer equipos del contexto
+                                const beforeScore = rowText.substring(0, scoreMatch.index).trim();
+                                const afterScore = rowText.substring(scoreMatch.index + scoreMatch[0].length).trim();
+                                
+                                // Si hay texto antes y después del marcador, pueden ser los equipos
+                                const words = beforeScore.split(/\s+/);
+                                if (words.length >= 2) {
+                                    team1 = words.slice(-2).join(' '); // Últimas 2 palabras antes del marcador
+                                }
+                                
+                                const afterWords = afterScore.split(/\s+/);
+                                if (afterWords.length >= 2) {
+                                    team2 = afterWords.slice(0, 2).join(' '); // Primeras 2 palabras después del marcador
+                                }
+                            }
+                        }
+                        
+                        // Validar y limpiar datos
+                        if (team1 && team2 && score) {
+                            // Limpiar nombres de equipos
+                            team1 = team1.replace(/[^\w\s]/g, '').trim();
+                            team2 = team2.replace(/[^\w\s]/g, '').trim();
+                            
+                            // Validar que no sean números o palabras muy cortas
+                            if (team1.length > 2 && team2.length > 2 && 
+                                !team1.match(/^\d+$/) && !team2.match(/^\d+$/) &&
+                                team1 !== team2) {
+                                
+                                results.push({
+                                    team1: team1.trim(),
+                                    team2: team2.trim(),
+                                    score: score.trim(),
+                                    date: date.trim() || 'Sin fecha',
+                                    page: page,
+                                    source: 'iosoccer-sa'
+                                });
+                                pageResults++;
+                            }
+                        }
+                    } catch (error) {
+                        // Silenciar errores individuales
+                    }
+                });
+                
+                console.log(`✅ Página ${page}: ${pageResults} resultados encontrados`);
+                
+                // Pausa entre páginas
+                if (page < maxPages) {
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+                }
+                
+            } catch (error) {
+                console.error(`❌ Error en página ${page}:`, error.message);
+            }
+        }
+        
+        console.log(`🎯 Scraping completado: ${results.length} resultados totales encontrados`);
+        return results;
+        
+    } catch (error) {
+        console.error('❌ Error general en scraping de resultados:', error.message);
+        return results;
+    }
+}
+
+function analyzeTeamPerformance(results) {
+    const teamStats = {};
+    
+    results.forEach(result => {
+        const { team1, team2, score } = result;
+        const [goals1, goals2] = score.split('-').map(g => parseInt(g.trim()));
+        
+        if (isNaN(goals1) || isNaN(goals2)) return;
+        
+        // Inicializar estadísticas si no existen
+        [team1, team2].forEach(teamName => {
+            if (!teamStats[teamName]) {
+                teamStats[teamName] = {
+                    matches: 0, wins: 0, draws: 0, losses: 0,
+                    goalsFor: 0, goalsAgainst: 0, lastResults: []
+                };
+            }
+        });
+        
+        // Actualizar estadísticas
+        teamStats[team1].matches++;
+        teamStats[team2].matches++;
+        teamStats[team1].goalsFor += goals1;
+        teamStats[team1].goalsAgainst += goals2;
+        teamStats[team2].goalsFor += goals2;
+        teamStats[team2].goalsAgainst += goals1;
+        
+        // Determinar resultado
+        if (goals1 > goals2) {
+            teamStats[team1].wins++;
+            teamStats[team2].losses++;
+            teamStats[team1].lastResults.unshift('W');
+            teamStats[team2].lastResults.unshift('L');
+        } else if (goals1 < goals2) {
+            teamStats[team1].losses++;
+            teamStats[team2].wins++;
+            teamStats[team1].lastResults.unshift('L');
+            teamStats[team2].lastResults.unshift('W');
+        } else {
+            teamStats[team1].draws++;
+            teamStats[team2].draws++;
+            teamStats[team1].lastResults.unshift('D');
+            teamStats[team2].lastResults.unshift('D');
+        }
+        
+        // Mantener solo los últimos 5 resultados
+        teamStats[team1].lastResults = teamStats[team1].lastResults.slice(0, 5);
+        teamStats[team2].lastResults = teamStats[team2].lastResults.slice(0, 5);
+    });
+    
+    return teamStats;
+}
+
+        function updateTeamsWithRealResults(teamStats) {
+    let updatedCount = 0;
+    
+    Object.entries(teamStats).forEach(([teamName, stats]) => {
+        const matchedTeam = findTeamByName(teamName);
+        
+        if (matchedTeam) {
+            const currentTeamData = teams[matchedTeam.fullName];
+            
+            if (stats.lastResults.length >= 3) {
+                const newForm = stats.lastResults.join('').padEnd(5, 'D').substring(0, 5);
+                
+                if (currentTeamData.lastFiveMatches !== newForm) {
+                    console.log(`📊 Actualizando forma de ${matchedTeam.fullName}: ${currentTeamData.lastFiveMatches} → ${newForm}`);
+                    currentTeamData.lastFiveMatches = newForm;
+                    
+                    // Guardar estadísticas adicionales
+                    currentTeamData.realStats = {
+                        matches: stats.matches,
+                        wins: stats.wins,
+                        draws: stats.draws,
+                        losses: stats.losses,
+                        goalsFor: stats.goalsFor,
+                        goalsAgainst: stats.goalsAgainst,
+                        goalDifference: stats.goalsFor - stats.goalsAgainst,
+                        averageGoalsFor: (stats.goalsFor / stats.matches).toFixed(2),
+                        averageGoalsAgainst: (stats.goalsAgainst / stats.matches).toFixed(2),
+                        winRate: ((stats.wins / stats.matches) * 100).toFixed(1),
+                        lastUpdated: new Date().toISOString()
+                    };
+                    
+                    updatedCount++;
+                }
+            }
+        } else {
+            console.log(`⚠️ No se encontró coincidencia para: ${teamName}`);
+        }
+    });
+    
+    return updatedCount;
+}
+        function analyzeResultSurprises(results, teamStats) {
+    const surprises = [];
+    const bigWins = [];
+    
+    results.forEach(result => {
+        const { team1, team2, score } = result;
+        const [goals1, goals2] = score.split('-').map(g => parseInt(g.trim()));
+        
+        if (isNaN(goals1) || isNaN(goals2)) return;
+        
+        // Detectar goleadas (diferencia >= 4 goles)
+        const goalDiff = Math.abs(goals1 - goals2);
+        if (goalDiff >= 4) {
+            const winner = goals1 > goals2 ? team1 : team2;
+            const loser = goals1 > goals2 ? team2 : team1;
+            
+            bigWins.push({
+                winner,
+                loser,
+                score,
+                goalDifference: goalDiff,
+                type: goalDiff >= 7 ? 'massacre' : goalDiff >= 5 ? 'thrashing' : 'beating'
+            });
+        }
+        
+        // Detectar sorpresas potenciales
+        if (goalDiff >= 6) {
+            surprises.push({
+                match: `${team1} ${score} ${team2}`,
+                type: 'potential_upset_or_expected',
+                notes: `Diferencia de ${goalDiff} goles`
+            });
+        }
+    });
+    
+    return { surprises, bigWins };
+}
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
     
@@ -2781,7 +3302,158 @@ case '!odds':
     
     message.reply({ embeds: [oddsEmbed] });
     break;
-
+         case '!actualizar_resultados':
+case '!updateresults':
+    const adminIdsForResults = ['438147217702780939'];
+    if (!adminIdsForResults.includes(message.author.id)) {
+        message.reply('❌ No tienes permisos para usar este comando.');
+        return;
+    }
+    
+    message.reply('🔍 Iniciando actualización de resultados desde IOSoccer... Esto puede tomar unos minutos.');
+    
+    try {
+        const results = await scrapeIOSoccerResults(8);
+        
+        if (results.length === 0) {
+            message.reply('❌ No se pudieron obtener resultados. Verifica la conexión o la estructura del sitio.');
+            return;
+        }
+        
+        const teamStats = analyzeTeamPerformance(results);
+        const updatedCount = updateTeamsWithRealResults(teamStats);
+        const { surprises, bigWins } = analyzeResultSurprises(results, teamStats);
+        
+        saveData();
+        
+        const topScorers = bigWins.slice(0, 5).map(bw => 
+            `• **${bw.winner}** ${bw.score} ${bw.loser} (${bw.goalDifference} goles de diferencia)`
+        ).join('\n') || 'No se encontraron goleadas significativas';
+        
+        const resultEmbed = new Discord.EmbedBuilder()
+            .setColor('#00ff00')
+            .setTitle('✅ Resultados Actualizados desde IOSoccer')
+            .addFields(
+                { name: 'Resultados procesados', value: `${results.length}`, inline: true },
+                { name: 'Equipos actualizados', value: `${updatedCount}`, inline: true },
+                { name: 'Goleadas detectadas', value: `${bigWins.length}`, inline: true },
+                { name: '🔥 Goleadas más destacadas', value: topScorers, inline: false }
+            )
+            .setFooter({ text: 'Los equipos ahora tienen forma reciente basada en resultados reales' })
+            .setTimestamp();
+        
+        message.reply({ embeds: [resultEmbed] });
+        
+    } catch (error) {
+        console.error('❌ Error actualizando resultados:', error);
+        message.reply('❌ Error al actualizar resultados. Revisa los logs para más detalles.');
+    }
+    break;
+        case '!equipo':
+case '!teamstats':
+    if (args.length < 2) {
+        message.reply('❌ Uso: `!equipo <nombre_equipo>`\nEjemplo: `!equipo Aimstar`');
+        return;
+    }
+    
+    const teamQuery = args.slice(1).join(' ');
+    const teamStats = getTeamDetailedStats(teamQuery);
+    
+    if (!teamStats) {
+        const suggestions = getTeamSuggestions(teamQuery, 3);
+        let suggestionText = `❌ No se encontró el equipo "${teamQuery}".`;
+        
+        if (suggestions.length > 0) {
+            suggestionText += '\n\n**¿Quisiste decir?**\n' + 
+                suggestions.map(s => `• **${s.name}** (${s.tournament} - Pos. ${s.position})`).join('\n');
+        }
+        
+        message.reply(suggestionText);
+        return;
+    }
+    
+    let statsText = `**Liga:** ${teamStats.tournament}\n`;
+    statsText += `**Posición:** ${teamStats.position}\n`;
+    statsText += `**Forma reciente:** ${teamStats.form} (${teamStats.formAnalysis.wins}W-${teamStats.formAnalysis.draws}D-${teamStats.formAnalysis.losses}L)\n`;
+    statsText += `**Puntos en últimos 5:** ${teamStats.formAnalysis.points}/15 (${teamStats.formAnalysis.percentage}%)\n`;
+    
+    if (teamStats.realStats) {
+        statsText += `\n**📊 Estadísticas Reales:**\n`;
+        statsText += `Partidos: ${teamStats.realStats.matches} | `;
+        statsText += `Récord: ${teamStats.realStats.wins}W-${teamStats.realStats.draws}D-${teamStats.realStats.losses}L\n`;
+        statsText += `Goles: ${teamStats.realStats.goalsFor} a favor, ${teamStats.realStats.goalsAgainst} en contra\n`;
+        statsText += `Promedio: ${teamStats.realStats.averageGoalsFor} por partido\n`;
+        statsText += `Efectividad: ${teamStats.realStats.winRate}%\n`;
+        statsText += `*Última actualización: ${new Date(teamStats.realStats.lastUpdated).toLocaleDateString()}*`;
+    }
+    
+    const teamEmbed = new Discord.EmbedBuilder()
+        .setColor('#0099ff')
+        .setTitle(`📊 ${teamStats.name}`)
+        .setDescription(statsText)
+        .setFooter({ text: 'Usa !actualizar_resultados para obtener estadísticas más precisas' });
+    
+    message.reply({ embeds: [teamEmbed] });
+    break;
+        case '!comparar':
+case '!compare':
+    if (args.length < 4 || !args.includes('vs')) {
+        message.reply('❌ Uso: `!comparar <equipo1> vs <equipo2>`\nEjemplo: `!comparar "Aimstar" vs "Deportivo Tarrito"`');
+        return;
+    }
+    
+    const compareCommand = message.content.slice(command.length).trim();
+    const compareVsIndex = compareCommand.toLowerCase().indexOf(' vs ');
+    
+    const compareTeam1Input = compareCommand.slice(0, compareVsIndex).trim().replace(/"/g, '');
+    const compareTeam2Input = compareCommand.slice(compareVsIndex + 4).trim().replace(/"/g, '');
+    
+    const compareTeam1Stats = getTeamDetailedStats(compareTeam1Input);
+    const compareTeam2Stats = getTeamDetailedStats(compareTeam2Input);
+    
+    if (!compareTeam1Stats || !compareTeam2Stats) {
+        message.reply('❌ No se encontró uno de los equipos para comparar.');
+        return;
+    }
+    
+    // Calcular ventajas
+    let advantages = [];
+    
+    if (compareTeam1Stats.position < compareTeam2Stats.position) {
+        advantages.push(`📈 **${compareTeam1Stats.name}** está mejor posicionado (${compareTeam1Stats.position}° vs ${compareTeam2Stats.position}°)`);
+    } else if (compareTeam2Stats.position < compareTeam1Stats.position) {
+        advantages.push(`📈 **${compareTeam2Stats.name}** está mejor posicionado (${compareTeam2Stats.position}° vs ${compareTeam1Stats.position}°)`);
+    }
+    
+    if (compareTeam1Stats.formAnalysis.points > compareTeam2Stats.formAnalysis.points) {
+        advantages.push(`🔥 **${compareTeam1Stats.name}** tiene mejor forma reciente (${compareTeam1Stats.formAnalysis.points} vs ${compareTeam2Stats.formAnalysis.points} puntos)`);
+    } else if (compareTeam2Stats.formAnalysis.points > compareTeam1Stats.formAnalysis.points) {
+        advantages.push(`🔥 **${compareTeam2Stats.name}** tiene mejor forma reciente (${compareTeam2Stats.formAnalysis.points} vs ${compareTeam1Stats.formAnalysis.points} puntos)`);
+    }
+    
+    if (compareTeam1Stats.league !== compareTeam2Stats.league) {
+        if (compareTeam1Stats.league === 'D1' && compareTeam2Stats.league === 'D2') {
+            advantages.push(`⭐ **${compareTeam1Stats.name}** juega en una liga superior (D1 vs D2)`);
+        } else if (compareTeam2Stats.league === 'D1' && compareTeam1Stats.league === 'D2') {
+            advantages.push(`⭐ **${compareTeam2Stats.name}** juega en una liga superior (D1 vs D2)`);
+        }
+    }
+    
+    const comparisonText = `**${compareTeam1Stats.name}** (${compareTeam1Stats.tournament})\n` +
+        `Posición: ${compareTeam1Stats.position} | Forma: ${compareTeam1Stats.form} (${compareTeam1Stats.formAnalysis.points} pts)\n\n` +
+        `**${compareTeam2Stats.name}** (${compareTeam2Stats.tournament})\n` +
+        `Posición: ${compareTeam2Stats.position} | Forma: ${compareTeam2Stats.form} (${compareTeam2Stats.formAnalysis.points} pts)\n\n` +
+        `**Análisis:**\n${advantages.join('\n') || 'Equipos muy parejos'}`;
+    
+    const compareEmbed = new Discord.EmbedBuilder()
+        .setColor('#9900ff')
+        .setTitle(`⚖️ Comparación de Equipos`)
+        .setDescription(comparisonText)
+        .setFooter({ text: 'Usa !crearmatch para crear un partido entre estos equipos' });
+    
+    message.reply({ embeds: [compareEmbed] });
+    break;
+        
 case '!apostarespecial':
 case '!betspecial':
     if (args.length < 4) {
