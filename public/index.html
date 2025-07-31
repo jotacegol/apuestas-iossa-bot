@@ -2442,56 +2442,195 @@ function switchTab(tabName) {
             showLoginInterface();
         }
     }
-
-async function loadTopUsers() {
+    async function checkAuthStatus() {
     try {
-        const container = document.getElementById('top-users');
-        if (container) {
-            container.innerHTML = '<div class="no-data">Cargando ranking...</div>';
-        }
+        const response = await fetch('/api/auth/status');
+        const data = await response.json();
         
-        // Intentar cargar desde el servidor
-        try {
-            const response = await fetch('/api/top-users');
-            if (response.ok) {
-                const topUsers = await response.json();
-                updateTopUsers(topUsers);
-                return;
+        const loginBtn = document.getElementById('login-btn');
+        const userInfo = document.getElementById('user-info');
+        const authRequired = document.getElementById('auth-required');
+        const tournamentAuthRequired = document.getElementById('tournament-auth-required');
+        const userBetsWidget = document.getElementById('user-bets-widget');
+        
+        if (data.authenticated && data.user) {
+            currentUser = data.user;
+            
+            // Mostrar información del usuario
+            if (loginBtn) loginBtn.style.display = 'none';
+            if (userInfo) {
+                userInfo.style.display = 'flex';
+                const avatarUrl = data.user.avatar 
+                    ? `https://cdn.discordapp.com/avatars/${data.user.id}/${data.user.avatar}.png?size=32`
+                    : `https://cdn.discordapp.com/embed/avatars/0.png`;
+                
+                document.getElementById('user-avatar').src = avatarUrl;
+                document.getElementById('user-name').textContent = data.user.username;
+                document.getElementById('user-balance').textContent = `${formatNumber(data.user.balance)} monedas`;
             }
-        } catch (error) {
-            console.log('📡 Servidor no disponible, usando datos locales');
+            
+            // Ocultar mensajes de autenticación requerida
+            if (authRequired) authRequired.style.display = 'none';
+            if (tournamentAuthRequired) tournamentAuthRequired.style.display = 'none';
+            
+            // Mostrar widget de apuestas del usuario
+            if (userBetsWidget) userBetsWidget.style.display = 'block';
+            
+            console.log('✅ Usuario autenticado:', data.user.username);
+        } else {
+            currentUser = null;
+            
+            // Mostrar botón de login
+            if (loginBtn) loginBtn.style.display = 'flex';
+            if (userInfo) userInfo.style.display = 'none';
+            
+            // Mostrar mensajes de autenticación requerida
+            if (authRequired) authRequired.style.display = 'block';
+            if (tournamentAuthRequired) tournamentAuthRequired.style.display = 'block';
+            
+            // Ocultar widget de apuestas del usuario
+            if (userBetsWidget) userBetsWidget.style.display = 'none';
+            
+            console.log('❌ Usuario no autenticado');
         }
         
-        // Si no hay servidor, crear lista solo con usuarios reales
-        let realUsers = [];
-        
-        // Si hay un usuario logueado, agregarlo
-        if (currentUser) {
-            realUsers.push({
-                id: currentUser.id,
-                username: currentUser.username,
-                discriminator: currentUser.discriminator,
-                avatar: currentUser.avatar,
-                balance: currentUser.balance || 10000
-            });
-        }
-        
-        // Si no hay usuarios reales, mostrar mensaje apropiado
-        if (realUsers.length === 0) {
-            container.innerHTML = '<div class="no-data">No hay usuarios para mostrar<br><small style="color: #999;">Inicia sesión para aparecer en el ranking</small></div>';
-            return;
-        }
-        
-        // Ordenar por balance de mayor a menor
-        realUsers.sort((a, b) => b.balance - a.balance);
-        
-        updateTopUsers(realUsers);
+        // Cargar datos después de verificar autenticación
+        loadTopUsers();
+        loadRecentBets();
+        loadUserBets();
         
     } catch (error) {
-        console.error('Error cargando top usuarios:', error);
+        console.error('❌ Error verificando autenticación:', error);
+        currentUser = null;
+    }
+}
+// Configurar WebSocket
+function setupWebSocket() {
+    if (typeof io !== 'undefined') {
+        socket = io();
+        
+        socket.on('connect', () => {
+            console.log('📡 WebSocket conectado');
+            updateConnectionStatus(true);
+        });
+        
+        socket.on('disconnect', () => {
+            console.log('📡 WebSocket desconectado');
+            updateConnectionStatus(false);
+        });
+        
+        socket.on('update', (data) => {
+            console.log('📡 Actualización recibida:', data.type);
+            
+            // Recargar datos relevantes según el tipo de actualización
+            switch (data.type) {
+                case 'new-bet':
+                    loadRecentBets();
+                    loadUserBets();
+                    break;
+                case 'match-result':
+                    loadTopUsers(); // El balance de usuarios puede haber cambiado
+                    loadRecentBets();
+                    loadUserBets();
+                    break;
+                case 'user-update':
+                    loadTopUsers();
+                    break;
+            }
+        });
+    }
+}
+
+// Función para actualizar estado de conexión
+function updateConnectionStatus(connected) {
+    const statusBadge = document.getElementById('status-badge');
+    const statusDot = document.getElementById('status-dot');
+    const statusText = document.getElementById('status-text');
+    
+    if (statusBadge && statusDot && statusText) {
+        if (connected) {
+            statusBadge.className = 'status-badge connected';
+            statusDot.className = 'status-dot connected';
+            statusText.textContent = 'Conectado';
+        } else {
+            statusBadge.className = 'status-badge disconnected';
+            statusDot.className = 'status-dot disconnected';
+            statusText.textContent = 'Desconectado';
+        }
+    }
+}
+
+// Configurar logout
+function setupLogout() {
+    const logoutBtn = document.getElementById('logout-btn');
+    if (logoutBtn) {
+        logoutBtn.addEventListener('click', async () => {
+            try {
+                const response = await fetch('/logout');
+                if (response.ok) {
+                    window.location.href = '/';
+                }
+            } catch (error) {
+                console.error('❌ Error al cerrar sesión:', error);
+            }
+        });
+    }
+}
+async function loadTopUsers() {
+    try {
+        const response = await fetch('/api/top-users');
+        const topUsers = await response.json();
+        
+        const container = document.getElementById('top-users');
+        
+        if (!container) {
+            console.error('❌ No se encontró el contenedor top-users');
+            return;
+        }
+
+        if (topUsers.length === 0) {
+            container.innerHTML = '<div class="no-data">No hay usuarios registrados</div>';
+            return;
+        }
+
+        let html = '';
+        topUsers.forEach((user, index) => {
+            const rank = index + 1;
+            const isCurrentUser = currentUser && currentUser.id === user.id;
+            
+            // Determinar clase de ranking
+            let rankClass = '';
+            if (rank === 1) rankClass = 'gold';
+            else if (rank === 2) rankClass = 'silver';
+            else if (rank === 3) rankClass = 'bronze';
+            
+            // URL del avatar de Discord
+            const avatarUrl = user.avatar 
+                ? `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png?size=32`
+                : `https://cdn.discordapp.com/embed/avatars/${parseInt(user.discriminator) % 5}.png`;
+
+            html += `
+                <div class="top-user-item ${isCurrentUser ? 'current-user' : ''}" data-user-id="${user.id}">
+                    <div class="top-user-rank ${rankClass}">${rank}</div>
+                    <img src="${avatarUrl}" alt="${user.username}" class="top-user-avatar" onerror="this.src='https://cdn.discordapp.com/embed/avatars/0.png'">
+                    <div class="top-user-info">
+                        <div class="top-user-name">${user.username}${user.discriminator !== '0000' ? `#${user.discriminator}` : ''}</div>
+                        <div class="top-user-balance">${formatNumber(user.balance)} monedas</div>
+                    </div>
+                    ${rank === 1 ? '<span class="crown-icon">👑</span>' : ''}
+                    ${isCurrentUser ? '<div class="top-user-badge">TÚ</div>' : ''}
+                </div>
+            `;
+        });
+
+        container.innerHTML = html;
+        console.log(`✅ Ranking cargado con ${topUsers.length} usuarios`);
+
+    } catch (error) {
+        console.error('❌ Error cargando ranking:', error);
         const container = document.getElementById('top-users');
         if (container) {
-            container.innerHTML = '<div class="no-data">Error al cargar ranking</div>';
+            container.innerHTML = '<div class="no-data">Error cargando ranking</div>';
         }
     }
 }
@@ -2740,30 +2879,96 @@ socket.on('update', (update) => {
     }
 
     async function loadRecentBets() {
-        try {
-            const response = await fetch('/api/recent-bets');
-            const bets = await response.json();
-            updateRecentBets(bets);
-        } catch (error) {
-            console.error('Error cargando apuestas:', error);
+    try {
+        const response = await fetch('/api/recent-bets');
+        const recentBets = await response.json();
+        
+        const container = document.getElementById('recent-bets');
+        
+        if (!container) {
+            console.error('❌ No se encontró el contenedor recent-bets');
+            return;
         }
+
+        if (recentBets.length === 0) {
+            container.innerHTML = '<div class="no-data">No hay apuestas recientes</div>';
+            return;
+        }
+
+        let html = '';
+        recentBets.forEach(bet => {
+            const statusClass = bet.status === 'won' ? 'won' : bet.status === 'lost' ? 'lost' : 'pending';
+            const statusIcon = bet.status === 'won' ? '✅' : bet.status === 'lost' ? '❌' : '⏳';
+            
+            html += `
+                <div class="bet-item ${statusClass}">
+                    <div class="bet-match">${bet.match}</div>
+                    <div class="bet-details">${statusIcon} ${bet.prediction} - ${formatNumber(bet.amount)} monedas</div>
+                </div>
+            `;
+        });
+
+        container.innerHTML = html;
+        console.log(`✅ Apuestas recientes cargadas: ${recentBets.length}`);
+
+    } catch (error) {
+        console.error('❌ Error cargando apuestas recientes:', error);
+        const container = document.getElementById('recent-bets');
+        if (container) {
+            container.innerHTML = '<div class="no-data">Error cargando apuestas</div>';
+        }
+    }
+}
+
+// Función para cargar apuestas del usuario (solo si está autenticado)
+async function loadUserBets() {
+    if (!currentUser) {
+        const container = document.getElementById('user-bets');
+        if (container) {
+            container.innerHTML = '<div class="no-data">Inicia sesión para ver tus apuestas</div>';
+        }
+        return;
     }
 
-    async function loadUserBets() {
-        if (!currentUser) return;
+    try {
+        const response = await fetch('/api/user/bets');
+        if (!response.ok) {
+            throw new Error('Error en la respuesta del servidor');
+        }
         
-        try {
-            const response = await fetch('/api/user/bets');
-            if (response.ok) {
-                const bets = await response.json();
-                updateUserBets(bets);
-            } else {
-                console.error('Error en la respuesta de user bets:', response.status);
-            }
-        } catch (error) {
-            console.error('Error cargando apuestas del usuario:', error);
+        const userBets = await response.json();
+        const container = document.getElementById('user-bets');
+        
+        if (!container) return;
+
+        if (userBets.length === 0) {
+            container.innerHTML = '<div class="no-data">Aún no has hecho apuestas</div>';
+            return;
+        }
+
+        let html = '';
+        userBets.slice(0, 5).forEach(bet => {
+            const statusClass = bet.status === 'won' ? 'won' : bet.status === 'lost' ? 'lost' : 'pending';
+            const statusIcon = bet.status === 'won' ? '✅' : bet.status === 'lost' ? '❌' : '⏳';
+            
+            html += `
+                <div class="bet-item ${statusClass}">
+                    <div class="bet-match">${bet.match.team1} vs ${bet.match.team2}</div>
+                    <div class="bet-details">${statusIcon} ${bet.predictionText} - ${formatNumber(bet.amount)} monedas</div>
+                </div>
+            `;
+        });
+
+        container.innerHTML = html;
+
+    } catch (error) {
+        console.error('❌ Error cargando apuestas del usuario:', error);
+        const container = document.getElementById('user-bets');
+        if (container) {
+            container.innerHTML = '<div class="no-data">Error cargando tus apuestas</div>';
         }
     }
+}
 
     // Actualizar interfaces
     function updateMatches(newMatches) {
@@ -2959,6 +3164,9 @@ socket.on('update', (update) => {
             </div>
         `).join('');
     }
+    function formatNumber(num) {
+    return parseInt(num).toLocaleString('es-ES');
+}
 
     function getStatusText(status) {
         switch(status) {
@@ -3964,28 +4172,30 @@ function updateTournamentMatchesDisplay(matches) {
     window.switchTab = switchTab;
 
     // Inicialización
+// Inicializar cuando se carga la página
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('🚀 Inicializando aplicación...');
-    checkAuth();
-    loadMatches();
-    loadStats();
-    loadRecentBets();
+    console.log('🚀 IOSoccer Betting System iniciando...');
+    
+    // Verificar autenticación y cargar datos
+    checkAuthStatus();
+    
+    // Configurar WebSocket
+    setupWebSocket();
+    
+    // Configurar logout
+    setupLogout();
+    
+    // Recargar datos cada 30 segundos
+    setInterval(() => {
         loadTopUsers();
-        
-        // Actualizar cada 30 segundos
-        setInterval(() => {
-            if (isConnected) {
-                if (currentTab === 'matches') {
-                    loadMatches();
-                    loadStats();
-                    loadRecentBets();
-                    if (currentUser) loadUserBets();
-                } else if (currentTab === 'results') {
-                    loadResults();
-                }
-            }
-        }, 30000);
-    });
+        loadRecentBets();
+        if (currentUser) {
+            loadUserBets();
+        }
+    }, 30000);
+    
+    console.log('✅ Sistema inicializado correctamente');
+});
 </script>
 
 </body>
