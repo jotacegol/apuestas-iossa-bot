@@ -19,7 +19,84 @@ const passport = require('passport');
 const DiscordStrategy = require('passport-discord').Strategy;
 const session = require('express-session');
 const cookieParser = require('cookie-parser');
+// Agregar al inicio del archivo, después de los requires
+const mongoose = require('mongoose');
 
+// Esquemas de MongoDB
+const userSchema = new mongoose.Schema({
+    _id: String,
+    username: String,
+    discriminator: String,
+    avatar: String,
+    balance: { type: Number, default: 1000 },
+    totalBets: { type: Number, default: 0 },
+    wonBets: { type: Number, default: 0 },
+    lostBets: { type: Number, default: 0 },
+    totalWinnings: { type: Number, default: 0 }
+});
+
+const teamSchema = new mongoose.Schema({
+    _id: String, // nombre completo del equipo
+    position: Number,
+    lastFiveMatches: String,
+    league: String,
+    tournament: String,
+    originalName: String
+});
+
+const matchSchema = new mongoose.Schema({
+    _id: String, // matchId
+    team1: String,
+    team2: String,
+    odds: {
+        team1: Number,
+        draw: Number,
+        team2: Number
+    },
+    matchTime: String,
+    status: String,
+    result: String,
+    score: String,
+    bets: [String],
+    isCustom: Boolean,
+    tournament: String
+});
+
+const betSchema = new mongoose.Schema({
+    _id: String, // betId
+    userId: String,
+    matchId: String,
+    prediction: String,
+    amount: Number,
+    odds: Number,
+    status: String,
+    timestamp: String,
+    betType: String,
+    description: String,
+    exactScore: {
+        home: Number,
+        away: Number
+    },
+    specialType: String,
+    specialBets: [mongoose.Schema.Types.Mixed]
+});
+
+const matchResultSchema = new mongoose.Schema({
+    _id: String, // matchId
+    result: String,
+    score: String,
+    timestamp: String,
+    isManual: Boolean,
+    setBy: String,
+    specialResults: mongoose.Schema.Types.Mixed
+});
+
+// Modelos
+const User = mongoose.model('User', userSchema);
+const Team = mongoose.model('Team', teamSchema);
+const Match = mongoose.model('Match', matchSchema);
+const Bet = mongoose.model('Bet', betSchema);
+const MatchResult = mongoose.model('MatchResult', matchResultSchema);
 // Servidor Web
 const app = express();
 const server = http.createServer(app);
@@ -739,74 +816,6 @@ const client = new Discord.Client({ intents: [Discord.GatewayIntentBits.Guilds, 
 
 let userData = {}, teams = {}, matches = {}, bets = {}, matchResults = {};
 
-function loadData() {
-    try {
-        if (fs.existsSync('userData.json')) userData = JSON.parse(fs.readFileSync('userData.json'));
-        if (fs.existsSync('teams.json')) teams = JSON.parse(fs.readFileSync('teams.json'));
-        if (fs.existsSync('matches.json')) matches = JSON.parse(fs.readFileSync('matches.json'));
-        if (fs.existsSync('bets.json')) bets = JSON.parse(fs.readFileSync('bets.json'));
-        if (fs.existsSync('matchResults.json')) matchResults = JSON.parse(fs.readFileSync('matchResults.json'));
-    } catch (error) { console.log('Iniciando con datos vacíos:', error.message); }
-}
-
-function saveData() {
-    fs.writeFileSync('userData.json', JSON.stringify(userData, null, 2));
-    fs.writeFileSync('teams.json', JSON.stringify(teams, null, 2));
-    fs.writeFileSync('matches.json', JSON.stringify(matches, null, 2));
-    fs.writeFileSync('bets.json', JSON.stringify(bets, null, 2));
-    fs.writeFileSync('matchResults.json', JSON.stringify(matchResults, null, 2));
-}
-
-function initUser(userId, username = null, discriminator = null, avatar = null) {
-    return new Promise((resolve) => {
-        let needsSave = false;
-        
-        console.log(`🔄 Inicializando usuario: ${userId} - ${username}`);
-        
-        if (!userData[userId]) {
-            userData[userId] = { 
-                balance: 1000, 
-                totalBets: 0, 
-                wonBets: 0, 
-                lostBets: 0, 
-                totalWinnings: 0, 
-                username: username || 'Usuario',
-                discriminator: discriminator || '0000',
-                avatar: avatar || null
-            };
-            needsSave = true;
-            console.log(`👤 Nuevo usuario creado: ${username || 'Usuario'} - Balance inicial: 1000`);
-        } else {
-            // Actualizar datos si ya existe el usuario pero con nueva info
-            let updated = false;
-            
-            if (username && userData[userId].username !== username) {
-                userData[userId].username = username;
-                updated = true;
-            }
-            if (discriminator && userData[userId].discriminator !== discriminator) {
-                userData[userId].discriminator = discriminator;
-                updated = true;
-            }
-            if (avatar && userData[userId].avatar !== avatar) {
-                userData[userId].avatar = avatar;
-                updated = true;
-            }
-            
-            if (updated) {
-                needsSave = true;
-                console.log(`🔄 Usuario actualizado: ${username || userData[userId].username}`);
-            }
-        }
-        
-        if (needsSave) {
-            saveData();
-        }
-        
-        resolve(userData[userId]);
-    });
-}
-
 function calculateOdds(team1, team2) {
     const t1 = teams[team1], t2 = teams[team2];
     if (!t1 || !t2) return { team1: 2.0, draw: 3.0, team2: 2.0 };
@@ -1050,6 +1059,238 @@ const TOURNAMENT_NAMES = {
     izoro: 'Copa Intrazonal de Oro',
     izplata: 'Copa Intrazonal de Plata'
 };
+
+    // Conectar a MongoDB
+async function connectDB() {
+    try {
+        await mongoose.connect(process.env.MONGODB_URI);
+        console.log('✅ Conectado a MongoDB');
+        await loadData(); // Cargar datos después de conectar
+    } catch (error) {
+        console.error('❌ Error conectando a MongoDB:', error);
+        process.exit(1);
+    }
+}
+
+// NUEVA función loadData() para MongoDB
+async function loadData() {
+    try {
+        console.log('📥 Cargando datos desde MongoDB...');
+        
+        // Cargar usuarios
+        const users = await User.find({});
+        userData = {};
+        users.forEach(user => {
+            userData[user._id] = {
+                username: user.username,
+                discriminator: user.discriminator,
+                avatar: user.avatar,
+                balance: user.balance,
+                totalBets: user.totalBets,
+                wonBets: user.wonBets,
+                lostBets: user.lostBets,
+                totalWinnings: user.totalWinnings
+            };
+        });
+        
+        // Cargar equipos
+        const teamDocs = await Team.find({});
+        teams = {};
+        teamDocs.forEach(team => {
+            teams[team._id] = {
+                position: team.position,
+                lastFiveMatches: team.lastFiveMatches,
+                league: team.league,
+                tournament: team.tournament,
+                originalName: team.originalName
+            };
+        });
+        
+        // Cargar partidos
+        const matchDocs = await Match.find({});
+        matches = {};
+        matchDocs.forEach(match => {
+            matches[match._id] = {
+                id: match._id,
+                team1: match.team1,
+                team2: match.team2,
+                odds: match.odds,
+                matchTime: match.matchTime,
+                status: match.status,
+                result: match.result,
+                score: match.score,
+                bets: match.bets,
+                isCustom: match.isCustom,
+                tournament: match.tournament
+            };
+        });
+        
+        // Cargar apuestas
+        const betDocs = await Bet.find({});
+        bets = {};
+        betDocs.forEach(bet => {
+            bets[bet._id] = {
+                id: bet._id,
+                userId: bet.userId,
+                matchId: bet.matchId,
+                prediction: bet.prediction,
+                amount: bet.amount,
+                odds: bet.odds,
+                status: bet.status,
+                timestamp: bet.timestamp,
+                betType: bet.betType,
+                description: bet.description,
+                exactScore: bet.exactScore,
+                specialType: bet.specialType,
+                specialBets: bet.specialBets
+            };
+        });
+        
+        // Cargar resultados
+        const resultDocs = await MatchResult.find({});
+        matchResults = {};
+        resultDocs.forEach(result => {
+            matchResults[result._id] = {
+                result: result.result,
+                score: result.score,
+                timestamp: result.timestamp,
+                isManual: result.isManual,
+                setBy: result.setBy,
+                specialResults: result.specialResults
+            };
+        });
+        
+        console.log(`✅ Datos cargados: ${Object.keys(userData).length} usuarios, ${Object.keys(teams).length} equipos, ${Object.keys(matches).length} partidos`);
+        
+    } catch (error) {
+        console.error('❌ Error cargando datos:', error);
+    }
+}
+
+// NUEVA función saveData() para MongoDB
+async function saveData() {
+    try {
+        // Guardar usuarios
+        for (const [userId, user] of Object.entries(userData)) {
+            await User.findByIdAndUpdate(userId, {
+                username: user.username,
+                discriminator: user.discriminator,
+                avatar: user.avatar,
+                balance: user.balance,
+                totalBets: user.totalBets,
+                wonBets: user.wonBets,
+                lostBets: user.lostBets,
+                totalWinnings: user.totalWinnings
+            }, { upsert: true });
+        }
+        
+        // Guardar equipos
+        for (const [teamName, team] of Object.entries(teams)) {
+            await Team.findByIdAndUpdate(teamName, {
+                position: team.position,
+                lastFiveMatches: team.lastFiveMatches,
+                league: team.league,
+                tournament: team.tournament,
+                originalName: team.originalName
+            }, { upsert: true });
+        }
+        
+        // Guardar partidos
+        for (const [matchId, match] of Object.entries(matches)) {
+            await Match.findByIdAndUpdate(matchId, {
+                team1: match.team1,
+                team2: match.team2,
+                odds: match.odds,
+                matchTime: match.matchTime,
+                status: match.status,
+                result: match.result,
+                score: match.score,
+                bets: match.bets,
+                isCustom: match.isCustom,
+                tournament: match.tournament
+            }, { upsert: true });
+        }
+        
+        // Guardar apuestas
+        for (const [betId, bet] of Object.entries(bets)) {
+            await Bet.findByIdAndUpdate(betId, {
+                userId: bet.userId,
+                matchId: bet.matchId,
+                prediction: bet.prediction,
+                amount: bet.amount,
+                odds: bet.odds,
+                status: bet.status,
+                timestamp: bet.timestamp,
+                betType: bet.betType,
+                description: bet.description,
+                exactScore: bet.exactScore,
+                specialType: bet.specialType,
+                specialBets: bet.specialBets
+            }, { upsert: true });
+        }
+        
+        // Guardar resultados
+        for (const [matchId, result] of Object.entries(matchResults)) {
+            await MatchResult.findByIdAndUpdate(matchId, {
+                result: result.result,
+                score: result.score,
+                timestamp: result.timestamp,
+                isManual: result.isManual,
+                setBy: result.setBy,
+                specialResults: result.specialResults
+            }, { upsert: true });
+        }
+        
+    } catch (error) {
+        console.error('❌ Error guardando datos:', error);
+    }
+}
+
+    // NUEVA función initUser() mejorada
+async function initUser(userId, username = null, discriminator = null, avatar = null) {
+    try {
+        if (!userData[userId]) {
+            userData[userId] = { 
+                balance: 1000, 
+                totalBets: 0, 
+                wonBets: 0, 
+                lostBets: 0, 
+                totalWinnings: 0, 
+                username: username || 'Usuario',
+                discriminator: discriminator || '0000',
+                avatar: avatar || null
+            };
+            
+            // Guardar inmediatamente en MongoDB
+            await User.findByIdAndUpdate(userId, userData[userId], { upsert: true });
+            console.log(`👤 Nuevo usuario creado: ${username || 'Usuario'}`);
+        } else {
+            // Actualizar datos si ya existe
+            let updated = false;
+            if (username && userData[userId].username !== username) {
+                userData[userId].username = username;
+                updated = true;
+            }
+            if (discriminator && userData[userId].discriminator !== discriminator) {
+                userData[userId].discriminator = discriminator;
+                updated = true;
+            }
+            if (avatar && userData[userId].avatar !== avatar) {
+                userData[userId].avatar = avatar;
+                updated = true;
+            }
+            
+            if (updated) {
+                await User.findByIdAndUpdate(userId, userData[userId], { upsert: true });
+            }
+        }
+        
+        return userData[userId];
+    } catch (error) {
+        console.error('❌ Error inicializando usuario:', error);
+        return userData[userId] || { balance: 1000, totalBets: 0, wonBets: 0, lostBets: 0, totalWinnings: 0 };
+    }
+}
 
 // Torneos que no tienen WDL (fase eliminatoria)
 const KNOCKOUT_TOURNAMENTS = ['cv', 'izoro', 'izplata', 'cd2', 'cd3'];
@@ -2487,15 +2728,9 @@ case '!betspecial':
 });
 
 // Agregar después de loadData() en el ready event
-client.on('ready', () => {
+client.on('ready', async () => {
     console.log(`Bot conectado como ${client.user.tag}!`);
-    loadData();
-    
-    // DEBUG: Mostrar usuarios cargados
-    console.log(`📊 Usuarios cargados: ${Object.keys(userData).length}`);
-    Object.entries(userData).forEach(([id, user]) => {
-        console.log(`  - ${user.username || 'Usuario'}: Balance ${user.balance}`);
-    });
+    await connectDB(); // Conectar a MongoDB primero
     
     setInterval(() => {
         if (Object.keys(teams).length >= 2) {
