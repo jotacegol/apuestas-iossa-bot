@@ -1953,24 +1953,6 @@ function calculateSimilarity(str1, str2) {
     return matches / longer.length;
 }
 
-function generateRandomMatches() {
-    const teamNames = Object.keys(teams);
-    if (teamNames.length < 2) return;
-    
-    const matchId = Date.now().toString();
-    const team1 = teamNames[Math.floor(Math.random() * teamNames.length)];
-    let team2 = teamNames[Math.floor(Math.random() * teamNames.length)];
-    while (team2 === team1) team2 = teamNames[Math.floor(Math.random() * teamNames.length)];
-    
-    const odds = calculateOdds(team1, team2);
-    const matchTime = new Date(Date.now() + Math.random() * 24 * 60 * 60 * 1000);
-    
-    matches[matchId] = { id: matchId, team1, team2, odds, matchTime: matchTime.toISOString(), status: 'upcoming', bets: [] };
-    saveData();
-    broadcastUpdate('new-match', matches[matchId]);
-    return matchId;
-}
-
 function simulateMatch(matchId) {
     const match = matches[matchId];
     if (!match || match.status !== 'upcoming') return null;
@@ -3606,13 +3588,6 @@ case '!betspecial':
 client.on('ready', async () => {
     console.log(`Bot conectado como ${client.user.tag}!`);
     await connectDB(); // Conectar a MongoDB primero
-    
-    setInterval(() => {
-        if (Object.keys(teams).length >= 2) {
-            generateRandomMatches();
-            console.log('Nuevo partido generado automáticamente');
-        }
-    }, 60 * 60 * 1000);
 });
 
 client.login(process.env.BOT_TOKEN);
